@@ -1,0 +1,3 @@
+# knative.dev/test-infra v0.0.0-20200606045118-14ebc4a42974
+## explicit
+knative.dev/test-infra/scripts
