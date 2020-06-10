@@ -25,9 +25,9 @@ export PATH="${PATH}:${GOPATH}/bin"
 ```sh
 mkdir -p ${GOPATH}/src/github.com/googleinterns
 cd ${GOPATH}/src/github.com/googleinterns
-git clone git@github.com:${YOUR_GITHUB_USERNAME}/knative-continuous-delivery
+git clone git@github.com:${YOUR_GITHUB_USERNAME}/knative-continuous-delivery.git
 cd knative-continuous-delivery
-git remote add upstream https://github.com/knative/serving.git
+git remote add upstream https://github.com/googleinterns/knative-continuous-delivery.git
 git remote set-url --push upstream no_push
 ```
 
