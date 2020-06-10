@@ -2,6 +2,49 @@
 
 # Knative Continuous Delivery
 
+## Development
+
+### Dependencies
+
+1. [go](https://golang.org/doc/install)
+
+### Setup environment
+
+Put the following in a `./bashrc` or `./bashprofile`
+
+```sh
+export GOPATH="$HOME/go"
+export PATH="${PATH}:${GOPATH}/bin"
+```
+
+### Clone to your machine
+
+1. [Fork this repo](https://help.github.com/articles/fork-a-repo/) to your account
+2. Clone to your machine
+
+```sh
+mkdir -p ${GOPATH}/src/github.com/googleinterns
+cd ${GOPATH}/src/github.com/googleinterns
+git clone git@github.com:${YOUR_GITHUB_USERNAME}/knative-continuous-delivery
+cd knative-continuous-delivery
+git remote add upstream https://github.com/knative/serving.git
+git remote set-url --push upstream no_push
+```
+
+`Upstream` will allow for you to [sync your fork](https://help.github.com/articles/syncing-a-fork/)
+
+### Building
+
+`go build ./...`
+
+### Running unit tests
+
+`go test ./...`
+
+### Updating dependencies
+
+`./hack/update-deps.sh`
+
 ## Source Code Headers
 
 Every file containing source code must include copyright and license
