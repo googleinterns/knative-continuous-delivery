@@ -30,3 +30,5 @@ find vendor/ -name '*_test.go' -delete
 update_licenses third_party/VENDOR-LICENSE "./..."
 
 remove_broken_symlinks ./vendor
+
+./hack/update-license.sh
