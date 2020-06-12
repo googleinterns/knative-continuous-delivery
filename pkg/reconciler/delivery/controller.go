@@ -28,7 +28,8 @@ const (
 	controllerAgentName = "delivery-controller"
 )
 
-// NewControllerWithConfig returns a controller generator to be called by generated knative pkg main.
+// NewControllerWithConfig returns a controller generator to be called by
+// generated knative pkg main.
 func NewControllerWithConfig(cfg *rest.Config) func(context.Context, configmap.Watcher) *controller.Impl {
 	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
 		logger := logging.FromContext(ctx)
