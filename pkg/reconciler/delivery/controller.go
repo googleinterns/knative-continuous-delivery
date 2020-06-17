@@ -17,7 +17,6 @@ package delivery
 import (
 	"context"
 
-	"k8s.io/client-go/rest"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
@@ -27,13 +26,11 @@ const (
 	controllerAgentName = "delivery-controller"
 )
 
-// NewControllerWithConfig returns a controller generator to be called by generated knative pkg main.
-func NewControllerWithConfig(cfg *rest.Config) func(context.Context, configmap.Watcher) *controller.Impl {
-	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
-		logger := logging.FromContext(ctx)
-		logger.Info("Hello world")
+// NewController returns a controller to be called by generated knative pkg main.
+func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	logger := logging.FromContext(ctx)
+	logger.Info("Hello world")
 
-		// TODO: Implement reconciler.
-		return nil
-	}
+	// TODO: Implement reconciler.
+	return nil
 }
