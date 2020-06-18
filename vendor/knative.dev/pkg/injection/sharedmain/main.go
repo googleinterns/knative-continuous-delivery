@@ -93,7 +93,7 @@ func GetLoggingConfig(ctx context.Context) (*logging.Config, error) {
 	var loggingConfigMap *corev1.ConfigMap
 	// These timeout and retry interval are set by heuristics.
 	// e.g. istio sidecar needs a few seconds to configure the pod network.
-	if err := wait.PollImmediateInfinite(1*time.Second, func() (bool, error) {
+	if err := wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
 		var err error
 		loggingConfigMap, err = kubeclient.Get(ctx).CoreV1().ConfigMaps(system.Namespace()).Get(logging.ConfigMapName(), metav1.GetOptions{})
 		return err == nil || apierrors.IsNotFound(err), nil
@@ -137,7 +137,6 @@ func MainWithConfig(ctx context.Context, component string, cfg *rest.Config, cto
 	log.Printf("Registering %d informer factories", len(injection.Default.GetInformerFactories()))
 	log.Printf("Registering %d informers", len(injection.Default.GetInformers()))
 	log.Printf("Registering %d controllers", len(ctors))
-	log.Printf("Sanity check: 3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d")
 
 	MemStatsOrDie(ctx)
 
@@ -147,7 +146,7 @@ func MainWithConfig(ctx context.Context, component string, cfg *rest.Config, cto
 	ctx = injection.WithConfig(ctx, cfg)
 
 	ctx, informers := injection.Default.SetupInformers(ctx, cfg)
-	fmt.Println("Sanity check to make sure we are compiling using newest version")
+
 	logger, atomicLevel := SetupLoggerOrDie(ctx, component)
 	defer flush(logger)
 	ctx = logging.WithLogger(ctx, logger)

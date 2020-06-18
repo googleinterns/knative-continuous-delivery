@@ -33,7 +33,7 @@ func NewControllerWithConfig(cfg *rest.Config) func(context.Context, configmap.W
 	return func(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
 		logger := logging.FromContext(ctx)
 		logger.Info("Hello world")
-		panic("If you see this you win!")
+
 		// TODO: Implement reconciler.
 		return nil
 	}
