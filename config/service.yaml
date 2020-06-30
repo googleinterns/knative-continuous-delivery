@@ -14,11 +14,6 @@ spec:
       - image: ko://github.com/googleinterns/knative-continuous-delivery/cmd/controller
         env:
         - name: SYSTEM_NAMESPACE
-          # value: "default"
-          # value: "istio-system"
-          # value: "knative-serving"
-          # value: "kube-node-lease"
-          # value: "kube-public"
           value: "kube-system"
         - name: CONFIG_LOGGING_NAME
           value: config-logging
