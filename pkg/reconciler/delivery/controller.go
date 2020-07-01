@@ -20,6 +20,15 @@ import (
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
+
+	servingclient "knative.dev/serving/pkg/client/injection/client"
+	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
+	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/route"
+	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
+
+	"k8s.io/client-go/tools/cache"
+	v1 "knative.dev/serving/pkg/apis/serving/v1"
+	servingreconciler "knative.dev/serving/pkg/reconciler"
 )
 
 const (
@@ -28,9 +37,26 @@ const (
 
 // NewController returns a controller to be called by generated knative pkg main.
 func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	ctx = servingreconciler.AnnotateLoggerWithName(ctx, controllerAgentName)
 	logger := logging.FromContext(ctx)
-	logger.Info("Hello world")
+	routeInformer := routeinformer.Get(ctx)
+	revisionInformer := revisioninformer.Get(ctx)
 
-	// TODO: Implement reconciler.
-	return nil
+	c := &Reconciler{
+		client:              servingclient.Get(ctx),
+		routeLister:         routeInformer.Lister(),
+	}
+	impl := configurationreconciler.NewImpl(ctx, c)
+
+	// set up event handlers to put things in the work queue of impl
+	logger.Info("Setting up event handlers")
+
+	handleControllerOf := cache.FilteringResourceEventHandler{
+		FilterFunc: controller.FilterControllerGK(v1.Kind("Configuration")),
+		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
+	}
+
+	revisionInformer.Informer().AddEventHandler(handleControllerOf)
+
+	return impl
 }
