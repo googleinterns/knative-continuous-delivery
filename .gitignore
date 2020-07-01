@@ -1,5 +1,5 @@
 # disregard locally built executable
-controller
+/controller
 
 # disregard other irrelevant scripts and hacks
-ignore/
+/ignore/
