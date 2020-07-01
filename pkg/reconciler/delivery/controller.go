@@ -22,7 +22,6 @@ import (
 	"knative.dev/pkg/logging"
 
 	servingclient "knative.dev/serving/pkg/client/injection/client"
-	configurationinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/configuration"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/route"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
@@ -41,13 +40,10 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	ctx = servingreconciler.AnnotateLoggerWithName(ctx, controllerAgentName)
 	logger := logging.FromContext(ctx)
 	routeInformer := routeinformer.Get(ctx)
-	configurationInformer := configurationinformer.Get(ctx)
 	revisionInformer := revisioninformer.Get(ctx)
 
 	c := &Reconciler{
 		client:              servingclient.Get(ctx),
-		configurationLister: configurationInformer.Lister(),
-		revisionLister:      revisionInformer.Lister(),
 		routeLister:         routeInformer.Lister(),
 	}
 	impl := configurationreconciler.NewImpl(ctx, c)
