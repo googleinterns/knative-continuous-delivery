@@ -4,9 +4,9 @@ go 1.14
 
 require (
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	knative.dev/pkg v0.0.0-20200603222317-b79e4a24ca50
-	knative.dev/serving v0.15.1
-	knative.dev/test-infra v0.0.0-20200606045118-14ebc4a42974
+	knative.dev/pkg v0.0.0-20200708171447-5358179e7499
+	knative.dev/serving v0.16.0
+	knative.dev/test-infra v0.0.0-20200708165947-2cd922769fa4
 )
 
 replace (
