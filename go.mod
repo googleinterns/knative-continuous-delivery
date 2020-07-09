@@ -3,6 +3,7 @@ module github.com/googleinterns/knative-continuous-delivery
 go 1.14
 
 require (
+	k8s.io/apimachinery v0.18.5
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
 	knative.dev/pkg v0.0.0-20200708171447-5358179e7499
 	knative.dev/serving v0.16.0
