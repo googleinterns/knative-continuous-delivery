@@ -1,6 +1,6 @@
 **This is not an officially supported Google product.**
 
-[![Build Status](https://travis-ci.org/googleinterns/knative-continuous-delivery.svg?branch=master)](https://travis-ci.org/googleinterns/knative-continuous-delivery)
+[![Build Status](https://travis-ci.org/googleinterns/knative-continuous-delivery.svg?branch=main)](https://travis-ci.org/googleinterns/knative-continuous-delivery)
 
 # Knative Continuous Delivery
 
