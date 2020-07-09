@@ -1,3 +1,5 @@
+.vscode/*
+
 # disregard locally built executable
 /controller
 
