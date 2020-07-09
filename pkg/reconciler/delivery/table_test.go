@@ -17,6 +17,7 @@ package delivery
 import (
 	"context"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,7 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
+	now := time.Now()
 	table := TableTest{{
 		Name: "bad workqueue key",
 		// Make sure Reconcile handles bad keys.
@@ -57,6 +59,8 @@ func TestReconcile(t *testing.T) {
 			{Object: Route("default", "test",
 				WithConfigTarget("test"),
 				WithRouteGeneration(1),
+				// whenever Route is changed, Annotation will receive a new timestamp
+				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
 				WithSpecTraffic(v1.TrafficTarget{ConfigurationName: "test", Percent: ptr.Int64(100)}),
 			)},
 		},
@@ -65,6 +69,8 @@ func TestReconcile(t *testing.T) {
 		r := &Reconciler{
 			client:      servingclient.Get(ctx),
 			routeLister: listers.GetRouteLister(),
+			// followup:    
+			timeProvider: func() time.Time { return now },
 		}
 		return configurationreconciler.NewReconciler(ctx, logging.FromContext(ctx), servingclient.Get(ctx),
 			listers.GetConfigurationLister(), controller.GetEventRecorder(ctx), r)

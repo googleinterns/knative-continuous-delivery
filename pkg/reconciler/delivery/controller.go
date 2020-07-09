@@ -16,6 +16,7 @@ package delivery
 
 import (
 	"context"
+	"time"
 
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
@@ -27,6 +28,7 @@ import (
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/apimachinery/pkg/types"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	servingreconciler "knative.dev/serving/pkg/reconciler"
 )
@@ -45,8 +47,13 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	c := &Reconciler{
 		client:              servingclient.Get(ctx),
 		routeLister:         routeInformer.Lister(),
+		timeProvider:        func() time.Time { return time.Now() },
 	}
 	impl := configurationreconciler.NewImpl(ctx, c)
+	// a little hack that allows the reconciler to queue an event for future processing by itself
+	c.followup = func(cfg *v1.Configuration, delay time.Duration) {
+		impl.WorkQueue.AddAfter(types.NamespacedName{Namespace: cfg.GetNamespace(), Name: cfg.GetName()}, delay)
+	}
 
 	// set up event handlers to put things in the work queue of impl
 	logger.Info("Setting up event handlers")
