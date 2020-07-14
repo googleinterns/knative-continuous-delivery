@@ -95,7 +95,7 @@ func shouldSkipConfig(cfg *v1.Configuration) bool {
 func configReady(cfg *v1.Configuration) bool {
 	latestReady := cfg.Status.LatestReadyRevisionName
 	latestCreated := cfg.Status.LatestCreatedRevisionName
-	return latestReady == latestCreated
+	return latestReady == latestCreated && latestReady != ""
 }
 
 // updateRoute figures out if the Route object needs any update and updates it as needed

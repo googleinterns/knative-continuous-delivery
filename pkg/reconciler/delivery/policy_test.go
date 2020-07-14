@@ -41,21 +41,21 @@ func TestComputeNewPercent(t *testing.T) {
 	var tests = []struct {
 		name        string
 		policy     *Policy
-		cp          int
+		cp          int  // (c)urrent (p)ercent
 		want        int
 		errExpected bool
 	}{
-		{"PA_present", &pa, 3, 4, false},
-		{"PA_not_present", &pa, 10, 0, true},
-		{"PB_last", &pb, 99, 100, false},
-		{"PB_present", &pb, 0, 90, false},
-		{"PC_last", &pc, 95, 100, false},
-		{"PC_not_present", &pc, 50, 80, false},
-		{"PC_100", &pc, 100, 0, true},
-		{"P0_empty", &p0, 0, 0, true},
+		{name: "policy A, current percent present", policy: &pa, cp: 3, want: 4, errExpected: false},
+		{name: "policy A, current percent not present", policy: &pa, cp: 10, want: 0, errExpected: true},
+		{name: "policy B, input is last stage", policy: &pb, cp: 99, want: 100, errExpected: false},
+		{name: "policy B, current percent present", policy: &pb, cp: 0, want: 90, errExpected: false},
+		{name: "policy C, input is last stage", policy: &pc, cp: 95, want: 100, errExpected: false},
+		{name: "policy C, current percent present", policy: &pc, cp: 50, want: 80, errExpected: false},
+		{name: "policy C, input 100 (error)", policy: &pc, cp: 100, want: 0, errExpected: true},
+		{name: "empty policy (error)", policy: &p0, cp: 0, want: 0, errExpected: true},
 		// the last test should have undefined behavior because policy Percents field must be sorted in increasing order
 		// this test is considered passed as long as the test driver doesn't crash
-		{"PX_unsorted", &pX, 90, -1, true},
+		{name: "unsorted policy (undefined)", policy: &pX, cp: 90, want: -1, errExpected: true},
 	}
 
 	for _, tt := range tests {
@@ -82,12 +82,12 @@ func TestGetThreshold(t *testing.T) {
 		want        int
 		errExpected bool
 	}{
-		{"PA_use_default", &pa, 3, 5, false},
-		{"PA_not_present", &pa, 10, 0, true},
-		{"P0_empty", &p0, 0, 0, true},
-		{"PX_unsorted", &pX, 90, -1, true},
-		{"PD_use_threshold", &pd, 7, 50, false},
-		{"PD_last_default", &pd, 10, 100, false},
+		{name: "policy A, return default threshold", policy: &pa, cp: 3, want: 5, errExpected: false},
+		{name: "policy A, current percent not present", policy: &pa, cp: 10, want: 0, errExpected: true},
+		{name: "empty policy (error)", policy: &p0, cp: 0, want: 0, errExpected: true},
+		{name: "unsorted policy (undefined)", policy: &pX, cp: 90, want: -1, errExpected: true},
+		{name: "policy D, stage specifies own threshold", policy: &pd, cp: 7, want: 50, errExpected: false},
+		{name: "policy D, last stage with default threshold", policy: &pd, cp: 10, want: 100, errExpected: false},
 	}
 
 	for _, tt := range tests {
