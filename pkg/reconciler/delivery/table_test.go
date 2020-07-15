@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 	"time"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,13 @@ func TestReconcile(t *testing.T) {
 		// Make sure Reconcile handles bad keys.
 		Key: "too/many/parts",
 	}, {
+		Name: "does nothing when event refers to KCD",
+		Key:  "default/test",
+		Objects: []runtime.Object{
+			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1)),
+			Configuration(KCDNamespace, KCDName),
+		},
+	}, {
 		Name: "does nothing when latest created is not ready",
 		Key:  "default/test",
 		Objects: []runtime.Object{
@@ -61,7 +69,39 @@ func TestReconcile(t *testing.T) {
 				WithRouteGeneration(1),
 				// whenever Route is changed, Annotation will receive a new timestamp
 				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
-				WithSpecTraffic(v1.TrafficTarget{ConfigurationName: "test", Percent: ptr.Int64(100)}),
+			)},
+		},
+	}, {
+		Name: "sets a 90/10 split when R2 enters",
+		Key:  "default/test",
+		Objects: []runtime.Object{
+			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1), withTraffic("status", pair{"R1", 100})),
+			Configuration("default", "test", WithLatestCreated("R2"), WithLatestReady("R2")),
+		},
+		WantUpdates: []clientgotesting.UpdateActionImpl{
+			{Object: Route("default", "test",
+				withTraffic("spec", pair{"R1", 90}, pair{"R2", 10}),
+				WithRouteGeneration(1),
+				withTraffic("status", pair{"R1", 100}),
+				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
+			)},
+		},
+	}, {
+		Name: "progresses to 50/50 with timestamp expiration",
+		Key:  "default/test",
+		Objects: []runtime.Object{
+			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(2),
+			withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
+			// we want the reconciler to think that the Route was last updated 25 seconds ago
+			WithRouteAnnotation(map[string]string{AnnotationKey: now.Add(-25 * time.Second).Format(TimeFormat)})),
+			Configuration("default", "test", WithLatestCreated("R2"), WithLatestReady("R2")),
+		},
+		WantUpdates: []clientgotesting.UpdateActionImpl{
+			{Object: Route("default", "test",
+				withTraffic("spec", pair{"R1", 50}, pair{"R2", 50}),
+				WithRouteGeneration(2),
+				withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
+				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
 			)},
 		},
 	}}
@@ -69,7 +109,8 @@ func TestReconcile(t *testing.T) {
 		r := &Reconciler{
 			client:      servingclient.Get(ctx),
 			routeLister: listers.GetRouteLister(),
-			// followup:    
+			// TODO: test event queue here
+			followup:    func(*v1.Configuration, time.Duration) { return },    
 			timeProvider: func() time.Time { return now },
 		}
 		return configurationreconciler.NewReconciler(ctx, logging.FromContext(ctx), servingclient.Get(ctx),
@@ -90,4 +131,34 @@ func Configuration(namespace, name string, co ...ConfigOption) *v1.Configuration
 	}
 	c.SetDefaults(context.Background())
 	return c
+}
+
+// this type is simply a convenient alias, see withTraffic funtion below for its purpose
+type pair struct {
+	name  string
+	value int64
+}
+
+// withTraffic extracts some verbiage from the table tests to make them more concise
+func withTraffic(field string, nameValuePairs ...pair) RouteOption {
+	tt := make([]v1.TrafficTarget, len(nameValuePairs))
+	for i, pair := range nameValuePairs {
+		tt[i] = v1.TrafficTarget{
+			RevisionName: pair.name,
+			LatestRevision: ptr.Bool(false),
+			Percent: ptr.Int64(pair.value),
+		}
+	}
+	if len(nameValuePairs) == 1 {
+		tt[0].LatestRevision = ptr.Bool(true)
+	}
+
+	switch field {
+	case "spec":
+		return WithSpecTraffic(tt...)
+	case "status":
+		return WithStatusTraffic(tt...)
+	default:
+		panic(fmt.Errorf("withTraffic field can only be 'spec' or 'status'"))
+	}
 }

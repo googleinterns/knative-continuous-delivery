@@ -39,7 +39,7 @@ const (
 	// AnnotationKey is the string used in ObjectMeta.Annotations map for any Route object
 	AnnotationKey = "KCDLastRouteUpdate"
 	// TimeFormat specifies the format used by time.Parse and time.Format
-	TimeFormat = time.ANSIC
+	TimeFormat = time.RFC3339
 )
 
 // Reconciler implements controller.Reconciler
@@ -172,10 +172,7 @@ func isRouteStatusUpToDate(route *v1.Route, newRevName string) bool {
 		// we shouldn't be able to reach this because timestamp is always formatted using TimeFormat
 		panic(fmt.Sprintf("failed to parse timestamp for %v", AnnotationKey))
 	}
-	if isTimestampExpired(previousTime, &policy, int(*route.Status.Traffic[1].Percent)) {
-		return false
-	}
-	return true
+	return !isTimestampExpired(previousTime, &policy, int(*route.Status.Traffic[1].Percent))
 }
 
 // isTimestampExpired determines if enough time has elapsed since the last Route update
