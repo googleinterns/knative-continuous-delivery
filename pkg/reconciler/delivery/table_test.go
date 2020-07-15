@@ -20,6 +20,7 @@ import (
 	"time"
 	"fmt"
 
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgotesting "k8s.io/client-go/testing"
@@ -34,6 +35,8 @@ import (
 	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing"
 	. "knative.dev/pkg/reconciler/testing"
 	. "knative.dev/serving/pkg/testing/v1"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestReconcile(t *testing.T) {
@@ -44,73 +47,93 @@ func TestReconcile(t *testing.T) {
 		Key: "too/many/parts",
 	}, {
 		Name: "does nothing when event refers to KCD",
-		Key:  "default/test",
+		Key:  "default/test1",
 		Objects: []runtime.Object{
-			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1)),
+			Route("default", "test1", WithConfigTarget("test1"), WithRouteGeneration(1)),
 			Configuration(KCDNamespace, KCDName),
+		},
+		PostConditions: []func(*testing.T, *TableRow) {
+			assertNoEventQueued("default/test1"),
 		},
 	}, {
 		Name: "does nothing when latest created is not ready",
-		Key:  "default/test",
+		Key:  "default/test2",
 		Objects: []runtime.Object{
-			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1)),
-			Configuration("default", "test", WithLatestCreated("rev-1")),
+			Route("default", "test2", WithConfigTarget("test2"), WithRouteGeneration(1)),
+			Configuration("default", "test2", WithLatestCreated("rev-1")),
+		},
+		PostConditions: []func(*testing.T, *TableRow) {
+			assertNoEventQueued("default/test2"),
 		},
 	}, {
 		Name: "sets the route to 100% if the configuration is ready",
-		Key:  "default/test",
+		Key:  "default/test3",
 		Objects: []runtime.Object{
-			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1)),
-			Configuration("default", "test", WithLatestCreated("rev-1"), WithLatestReady("rev-1")),
+			Route("default", "test3", WithConfigTarget("test3"), WithRouteGeneration(1)),
+			Configuration("default", "test3", WithLatestCreated("rev-1"), WithLatestReady("rev-1")),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test",
-				WithConfigTarget("test"),
+			{Object: Route("default", "test3",
+				WithConfigTarget("test3"),
 				WithRouteGeneration(1),
 				// whenever Route is changed, Annotation will receive a new timestamp
 				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
 			)},
 		},
+		PostConditions: []func(*testing.T, *TableRow) {
+			assertNoEventQueued("default/test3"),
+		},
 	}, {
 		Name: "sets a 90/10 split when R2 enters",
-		Key:  "default/test",
+		Key:  "default/test4",
 		Objects: []runtime.Object{
-			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(1), withTraffic("status", pair{"R1", 100})),
-			Configuration("default", "test", WithLatestCreated("R2"), WithLatestReady("R2")),
+			Route("default", "test4", WithConfigTarget("test4"), WithRouteGeneration(1), withTraffic("status", pair{"R1", 100})),
+			Configuration("default", "test4", WithLatestCreated("R2"), WithLatestReady("R2")),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test",
+			{Object: Route("default", "test4",
 				withTraffic("spec", pair{"R1", 90}, pair{"R2", 10}),
 				WithRouteGeneration(1),
 				withTraffic("status", pair{"R1", 100}),
 				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
 			)},
 		},
+		PostConditions: []func(*testing.T, *TableRow) {
+			assertEventQueued("default/test4", 20 * time.Second),
+		},
 	}, {
 		Name: "progresses to 50/50 with timestamp expiration",
-		Key:  "default/test",
+		Key:  "default/test5",
 		Objects: []runtime.Object{
-			Route("default", "test", WithConfigTarget("test"), WithRouteGeneration(2),
+			Route("default", "test5", WithConfigTarget("test5"), WithRouteGeneration(2),
 			withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
 			// we want the reconciler to think that the Route was last updated 25 seconds ago
 			WithRouteAnnotation(map[string]string{AnnotationKey: now.Add(-25 * time.Second).Format(TimeFormat)})),
-			Configuration("default", "test", WithLatestCreated("R2"), WithLatestReady("R2")),
+			Configuration("default", "test5", WithLatestCreated("R2"), WithLatestReady("R2")),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test",
+			{Object: Route("default", "test5",
 				withTraffic("spec", pair{"R1", 50}, pair{"R2", 50}),
 				WithRouteGeneration(2),
 				withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
 				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
 			)},
 		},
+		PostConditions: []func(*testing.T, *TableRow) {
+			assertEventQueued("default/test5", 20 * time.Second),
+		},
 	}}
-	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher) controller.Reconciler {
+	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, tr *TableRow) controller.Reconciler {
+		tr.OtherTestData = make(map[string]interface{})
 		r := &Reconciler{
 			client:      servingclient.Get(ctx),
 			routeLister: listers.GetRouteLister(),
-			// TODO: test event queue here
-			followup:    func(*v1.Configuration, time.Duration) { return },    
+			// note that we manually, systematically assigned unique namespace/name strings to each test Configuration
+			// we use those strings for each test 
+			followup: func(cfg *v1.Configuration, t time.Duration) {
+				key := cfg.GetNamespace() + "/" + cfg.GetName()
+				tr.OtherTestData[key] = fmt.Sprintf("%v", t)
+			},
 			timeProvider: func() time.Time { return now },
 		}
 		return configurationreconciler.NewReconciler(ctx, logging.FromContext(ctx), servingclient.Get(ctx),
@@ -160,5 +183,30 @@ func withTraffic(field string, nameValuePairs ...pair) RouteOption {
 		return WithStatusTraffic(tt...)
 	default:
 		panic(fmt.Errorf("withTraffic field can only be 'spec' or 'status'"))
+	}
+}
+
+// assertEventQueued returns a function that is used for PostConditions checking
+// its main purpose is to test whether events are properly enqueued
+func assertEventQueued(key string, want time.Duration) func(*testing.T, *TableRow) {
+	return func(t *testing.T, r *TableRow) {
+		got, ok := r.OtherTestData[key]
+		if !ok {
+			t.Errorf("expected event to be enqueued, but none found")
+			return
+		}
+		if diff := cmp.Diff(got, fmt.Sprintf("%v", want)); diff != "" {
+			t.Errorf("event is not correctly enqueued (-want, +got) %v", diff)
+		}
+	}
+}
+
+// assertNoEventQueued is used for tests where events should NOT be enqueued
+func assertNoEventQueued(key string) func(*testing.T, *TableRow) {
+	return func(t *testing.T, r *TableRow) {
+		got, ok := r.OtherTestData[key]
+		if ok {
+			t.Errorf("no events should be enqueued, but got %v", got)
+		}
 	}
 }
