@@ -109,10 +109,10 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
 
-	if isRouteStatusUpToDate(route, latestReady) {
+	if isRouteStatusUpToDate(route, latestReady, &policy) {
 		return nil
 	}
-	route, err = modifyRouteSpec(route, latestReady)
+	route, err = modifyRouteSpec(route, latestReady, &policy)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 }
 
 // isRouteStatusUpToDate determines if the current Route status already matches our desired state
-func isRouteStatusUpToDate(route *v1.Route, newRevName string) bool {
+func isRouteStatusUpToDate(route *v1.Route, newRevName string, policy *Policy) bool {
 	// the Route status is up to date if:
 	// 1. the new Revision is listed in the status traffic targets, AND
 	// 2. the Route time stamp hasn't expired
@@ -172,12 +172,13 @@ func isRouteStatusUpToDate(route *v1.Route, newRevName string) bool {
 		// we shouldn't be able to reach this because timestamp is always formatted using TimeFormat
 		panic(fmt.Sprintf("failed to parse timestamp for %v", AnnotationKey))
 	}
-	return !isTimestampExpired(previousTime, &policy, int(*route.Status.Traffic[1].Percent))
+	return !isTimestampExpired(previousTime, policy, int(*route.Status.Traffic[1].Percent))
 }
 
 // isTimestampExpired determines if enough time has elapsed since the last Route update
-func isTimestampExpired(ltt time.Time, p *Policy, cp int) bool {
-	t, e := getThreshold(p, cp)
+// ltt = Last Transition Time, i.e. the timestamp for the last Route update
+func isTimestampExpired(ltt time.Time, policy *Policy, cp int) bool {
+	t, e := getThreshold(policy, cp)
 	// we can ignore error handling here, because returning true will cause a Route update
 	// modifyRouteSpec will discover the exact same error, and it can report that error more conveniently
 	if e != nil {
@@ -188,7 +189,7 @@ func isTimestampExpired(ltt time.Time, p *Policy, cp int) bool {
 
 // modifyRouteSpec is a toy function that is designed specifically for the proof-of-concept
 // it modifies the Route spec field to accommodate the new Revision, if necessary
-func modifyRouteSpec(route *v1.Route, newRevName string) (*v1.Route, error) {
+func modifyRouteSpec(route *v1.Route, newRevName string, policy *Policy) (*v1.Route, error) {
 	// if there is currently zero traffic targets, then set the Configuration's
 	// latest ready Revision as the default traffic target
 	// if there is currently one traffic target, then split a certain % off that target and
@@ -203,7 +204,7 @@ func modifyRouteSpec(route *v1.Route, newRevName string) (*v1.Route, error) {
 		if route.Status.Traffic[0].RevisionName == newRevName {
 			return route, nil
 		}
-		newPercent, err = computeNewPercent(&policy, 0)
+		newPercent, err = computeNewPercent(policy, 0)
 		if err != nil {
 			return route, err
 		}
@@ -211,7 +212,7 @@ func modifyRouteSpec(route *v1.Route, newRevName string) (*v1.Route, error) {
 		if route.Status.Traffic[0].RevisionName != newRevName && route.Status.Traffic[1].RevisionName != newRevName {
 			return nil, fmt.Errorf("unsupported use case: current implementation only supports 2 Revisions at once")
 		}
-		newPercent, err = computeNewPercent(&policy, int(*route.Status.Traffic[1].Percent))
+		newPercent, err = computeNewPercent(policy, int(*route.Status.Traffic[1].Percent))
 		if err != nil {
 			return route, err
 		}
