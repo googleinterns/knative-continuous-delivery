@@ -23,7 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgotesting "k8s.io/client-go/testing"
+	// clientgotesting "k8s.io/client-go/testing"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
@@ -40,7 +40,6 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
-	now := time.Now()
 	table := TableTest{{
 		Name: "bad workqueue key",
 		// Make sure Reconcile handles bad keys.
@@ -52,75 +51,12 @@ func TestReconcile(t *testing.T) {
 			Route("default", "test1", WithConfigTarget("test1"), WithRouteGeneration(1)),
 			Configuration(KCDNamespace, KCDName),
 		},
-		PostConditions: []func(*testing.T, *TableRow) {
-			assertNoEventQueued("default/test1"),
-		},
 	}, {
 		Name: "does nothing when latest created is not ready",
 		Key:  "default/test2",
 		Objects: []runtime.Object{
 			Route("default", "test2", WithConfigTarget("test2"), WithRouteGeneration(1)),
 			Configuration("default", "test2", WithLatestCreated("rev-1")),
-		},
-		PostConditions: []func(*testing.T, *TableRow) {
-			assertNoEventQueued("default/test2"),
-		},
-	}, {
-		Name: "sets the route to 100% if the configuration is ready",
-		Key:  "default/test3",
-		Objects: []runtime.Object{
-			Route("default", "test3", WithConfigTarget("test3"), WithRouteGeneration(1)),
-			Configuration("default", "test3", WithLatestCreated("rev-1"), WithLatestReady("rev-1")),
-		},
-		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test3",
-				WithConfigTarget("test3"),
-				WithRouteGeneration(1),
-				// whenever Route is changed, Annotation will receive a new timestamp
-				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
-			)},
-		},
-		PostConditions: []func(*testing.T, *TableRow) {
-			assertNoEventQueued("default/test3"),
-		},
-	}, {
-		Name: "sets a 90/10 split when R2 enters",
-		Key:  "default/test4",
-		Objects: []runtime.Object{
-			Route("default", "test4", WithConfigTarget("test4"), WithRouteGeneration(1), withTraffic("status", pair{"R1", 100})),
-			Configuration("default", "test4", WithLatestCreated("R2"), WithLatestReady("R2")),
-		},
-		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test4",
-				withTraffic("spec", pair{"R1", 90}, pair{"R2", 10}),
-				WithRouteGeneration(1),
-				withTraffic("status", pair{"R1", 100}),
-				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
-			)},
-		},
-		PostConditions: []func(*testing.T, *TableRow) {
-			assertEventQueued("default/test4", 20 * time.Second),
-		},
-	}, {
-		Name: "progresses to 50/50 with timestamp expiration",
-		Key:  "default/test5",
-		Objects: []runtime.Object{
-			Route("default", "test5", WithConfigTarget("test5"), WithRouteGeneration(2),
-			withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
-			// we want the reconciler to think that the Route was last updated 25 seconds ago
-			WithRouteAnnotation(map[string]string{AnnotationKey: now.Add(-25 * time.Second).Format(TimeFormat)})),
-			Configuration("default", "test5", WithLatestCreated("R2"), WithLatestReady("R2")),
-		},
-		WantUpdates: []clientgotesting.UpdateActionImpl{
-			{Object: Route("default", "test5",
-				withTraffic("spec", pair{"R1", 50}, pair{"R2", 50}),
-				WithRouteGeneration(2),
-				withTraffic("status", pair{"R1", 90}, pair{"R2", 10}),
-				WithRouteAnnotation(map[string]string{AnnotationKey: now.Format(TimeFormat)}),
-			)},
-		},
-		PostConditions: []func(*testing.T, *TableRow) {
-			assertEventQueued("default/test5", 20 * time.Second),
 		},
 	}}
 	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, tr *TableRow) controller.Reconciler {
@@ -134,7 +70,6 @@ func TestReconcile(t *testing.T) {
 				key := cfg.GetNamespace() + "/" + cfg.GetName()
 				tr.OtherTestData[key] = fmt.Sprintf("%v", t)
 			},
-			timeProvider: func() time.Time { return now },
 		}
 		return configurationreconciler.NewReconciler(ctx, logging.FromContext(ctx), servingclient.Get(ctx),
 			listers.GetConfigurationLister(), controller.GetEventRecorder(ctx), r)

@@ -47,7 +47,7 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	c := &Reconciler{
 		client:              servingclient.Get(ctx),
 		routeLister:         routeInformer.Lister(),
-		timeProvider:        func() time.Time { return time.Now() },
+		revisionLister:      revisionInformer.Lister(),
 	}
 	impl := configurationreconciler.NewImpl(ctx, c)
 	// a little hack that allows the reconciler to queue an event for future processing by itself

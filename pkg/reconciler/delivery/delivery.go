@@ -16,14 +16,14 @@ package delivery
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
+	"math"
 
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
 	"knative.dev/pkg/logging"
-	"knative.dev/pkg/ptr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	listers "knative.dev/serving/pkg/client/listers/serving/v1"
@@ -38,21 +38,25 @@ const (
 	KCDName = "knative-continuous-delivery"
 	// AnnotationKey is the string used in ObjectMeta.Annotations map for any Route object
 	AnnotationKey = "KCDLastRouteUpdate"
+	// RevisionGenerationKey is the label key for querying how "old" a Revision is
+	RevisionGenerationKey = "serving.knative.dev/configurationGeneration"
+	// WaitForReady makes sure that when a newly created Revision becomes ready, it triggers the reconciler
+	WaitForReady = 5 * time.Second
 	// TimeFormat specifies the format used by time.Parse and time.Format
 	TimeFormat = time.RFC3339
 )
 
 // Reconciler implements controller.Reconciler
 type Reconciler struct {
-	client        clientset.Interface
-	routeLister   listers.RouteLister
-	followup      enqueueFunc
-	timeProvider  timeSnapshotFunc
+	client         clientset.Interface
+	routeLister    listers.RouteLister
+	revisionLister listers.RevisionLister
+	followup       enqueueFunc
 }
 
 // private aliases for the types in Reconciler
 type enqueueFunc func(*v1.Configuration, time.Duration)
-type timeSnapshotFunc func() time.Time
+
 
 // Check that our Reconciler implements ksvcreconciler.Interface
 var _ configurationreconciler.Interface = (*Reconciler)(nil)
@@ -62,15 +66,13 @@ var (
 	// use the same policy; in the future, we might want to associate a policy to each Configuration
 	policy Policy = Policy{
 		Mode: "time",
-		Percents: []Stage{{0, nil}, {10, nil}, {50, nil}, {90, nil}},
-		DefaultThreshold: 20,
+		Stages: []Stage{{0, nil}, {1, nil}, {10, nil}, {20, nil}, {90, nil}},
+		DefaultThreshold: 60,
 	}
 )
 
-// ReconcileKind is a very simple proof-of-concept reconciliation method
-// Assumes that there is one existing Revision and one new Revision
-// when the new Revision arrives, split traffic between 2 Revisions
-// according to newPercent/oldPercent
+
+// ReconcileKind is triggered to enforce the rollout policy
 func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) pkgreconciler.Event {
 	// ignore changes triggered by continuous-delivery itself
 	if shouldSkipConfig(cfg) {
@@ -79,6 +81,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 
 	// wait for latest created Revision to be ready
 	if !configReady(cfg) {
+		c.followup(cfg, WaitForReady)
 		return nil
 	}
 
@@ -98,7 +101,7 @@ func configReady(cfg *v1.Configuration) bool {
 	return latestReady == latestCreated && latestReady != ""
 }
 
-// updateRoute figures out if the Route object needs any update and updates it as needed
+// updateRoute assigns traffic to active Revisions, applies new Route, and enqueues future events
 func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) error {
 	logger := logging.FromContext(ctx)
 
@@ -109,22 +112,12 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
 
-	if isRouteStatusUpToDate(route, latestReady, &policy) {
-		return nil
-	}
-	route, err = modifyRouteSpec(route, latestReady, &policy)
+	route, err = modifyRouteSpec(route, c.revisionLister, latestReady, &policy)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("Applying updated Route object")
-
-	// record the timestamp for the current udpate to the Route object before actually pushing it
-	// this is used later when determining if Route status is up to date
-	if route.Annotations == nil {
-		route.Annotations = make(map[string]string)
-	}
-	route.Annotations[AnnotationKey] = c.timeProvider().Format(TimeFormat)
+	logger.Info("Applying Route object")
 	_, err = c.client.ServingV1().Routes(cfg.Namespace).Update(route)
 	if err != nil {
 		return err
@@ -132,110 +125,51 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 
 	// when we have latestRevision = true, we know that we don't need to queue future events
 	if *route.Spec.Traffic[0].LatestRevision {
-		logger.Info("Progressive rollout completed!")
+		logger.Info("Routing state has stabilized!")
 		return nil
 	}
-	t, e := getThreshold(&policy, int(*route.Spec.Traffic[1].Percent))
-	if e != nil {
-		return e
+
+	delay, err := timeTillNextEvent(route, c.revisionLister, &policy)
+	if err != nil {
+		return err
 	}
-	logger.Infof("Queueing event for %v seconds later", t)
-	c.followup(cfg, time.Duration(t) * time.Second)
+	if delay == 0 {
+		return nil
+	}
+	logger.Infof("Enqueueing event after %v", delay)
+	c.followup(cfg, delay)
 
 	return nil
 }
 
-// isRouteStatusUpToDate determines if the current Route status already matches our desired state
-func isRouteStatusUpToDate(route *v1.Route, newRevName string, policy *Policy) bool {
-	// the Route status is up to date if:
-	// 1. the new Revision is listed in the status traffic targets, AND
-	// 2. the Route time stamp hasn't expired
-	// OR if:
-	// 3. the new Revision is listed in the status traffic targets, AND
-	// 4. the new Revision already reached 100%
-	nameListed := false
-	for _, t := range route.Status.Traffic {
-		if t.RevisionName == newRevName {
-			nameListed = true
-			break
+// min is a helper that returns the minimum of an arbitrary number of integers
+func min(items ...int) int {
+	if len(items) == 0 {
+		panic(errors.New("min must have at least one argument"))
+	}
+	result := items[0]
+	for _, i := range items[1:] {
+		if i < result {
+			result = i
 		}
 	}
-	if !nameListed {
-		return false
-	}
-	if len(route.Status.Traffic) == 1 || *route.Status.Traffic[1].Percent == 100 {
-		return true
-	}
-	// by design, accessing route.Annotations[AnnotationKey] should not cause error
-	previousTime, err := time.Parse(TimeFormat, route.Annotations[AnnotationKey])
-	if err != nil {
-		// we shouldn't be able to reach this because timestamp is always formatted using TimeFormat
-		panic(fmt.Sprintf("failed to parse timestamp for %v", AnnotationKey))
-	}
-	return !isTimestampExpired(previousTime, policy, int(*route.Status.Traffic[1].Percent))
+	return result
 }
 
-// isTimestampExpired determines if enough time has elapsed since the last Route update
-// ltt = Last Transition Time, i.e. the timestamp for the last Route update
-func isTimestampExpired(ltt time.Time, policy *Policy, cp int) bool {
-	t, e := getThreshold(policy, cp)
-	// we can ignore error handling here, because returning true will cause a Route update
-	// modifyRouteSpec will discover the exact same error, and it can report that error more conveniently
-	if e != nil {
-		return true
-	}
-	return !time.Now().Before(ltt.Add(time.Duration(t) * time.Second))
-}
-
-// modifyRouteSpec is a toy function that is designed specifically for the proof-of-concept
-// it modifies the Route spec field to accommodate the new Revision, if necessary
-func modifyRouteSpec(route *v1.Route, newRevName string, policy *Policy) (*v1.Route, error) {
-	// if there is currently zero traffic targets, then set the Configuration's
-	// latest ready Revision as the default traffic target
-	// if there is currently one traffic target, then split a certain % off that target and
-	// direct it to the new Revision
-	// if there are 2 traffic targets, update the percentage split, or report error if the 
-	// new Revision name doesn't match with either target
-	// Note: when there are > 1 traffic targets, it is assumed that they are ordered from oldest to newest
-	newPercent := 100
-	var err error
-
-	if len(route.Status.Traffic) == 1 {
-		if route.Status.Traffic[0].RevisionName == newRevName {
-			return route, nil
-		}
-		newPercent, err = computeNewPercent(policy, 0)
+// timeTillNextEvent calculates the time to wait before enqueueing the next event
+func timeTillNextEvent(route *v1.Route, r listers.RevisionLister, policy *Policy) (time.Duration, error) {
+	result := math.MaxInt32
+	// compute how long each Revision would like to wait, and then take the minimum
+	for _, t := range route.Spec.Traffic {
+		revision, err := r.Revisions(route.Namespace).Get(t.RevisionName)
 		if err != nil {
-			return route, err
+			return 0, err
 		}
-	} else if len(route.Status.Traffic) == 2 {
-		if route.Status.Traffic[0].RevisionName != newRevName && route.Status.Traffic[1].RevisionName != newRevName {
-			return nil, fmt.Errorf("unsupported use case: current implementation only supports 2 Revisions at once")
+		if revision.Labels[RevisionGenerationKey] == "1" {
+			continue
 		}
-		newPercent, err = computeNewPercent(policy, int(*route.Status.Traffic[1].Percent))
-		if err != nil {
-			return route, err
-		}
+		timeElapsed := time.Since(revision.CreationTimestamp.Time)
+		result = min(metricTillNextStage(policy, timeElapsed), result)
 	}
-
-	if newPercent == 100 {
-		route.Spec.Traffic = []v1.TrafficTarget{{
-				ConfigurationName: route.Name, // assume namespace/name matches for Route & Config
-				LatestRevision: ptr.Bool(true),
-				Percent: ptr.Int64(100),
-			}}
-		return route, nil
-	}
-	
-	route.Spec.Traffic = []v1.TrafficTarget{{
-			RevisionName: route.Status.Traffic[0].RevisionName,
-			LatestRevision: ptr.Bool(false),
-			Percent: ptr.Int64(int64(100 - newPercent)),
-		},{
-			RevisionName: newRevName,
-			LatestRevision: ptr.Bool(false),
-			Percent: ptr.Int64(int64(newPercent)),
-		}}
-
-	return route, nil
+	return time.Duration(result) * time.Second, nil
 }
