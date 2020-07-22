@@ -16,6 +16,8 @@ package delivery
 
 import (
 	"testing"
+	"time"
+	"math"
 )
 
 var (
@@ -101,6 +103,58 @@ func TestGetThreshold(t *testing.T) {
 			}
 			if (tt.errExpected && e == nil) || (!tt.errExpected && e != nil) {
 				t.Errorf("error output doesn't match")
+			}
+		})
+	}
+}
+
+func TestComputeNewPercentExplicit(t *testing.T) {
+	var tests = []struct {
+		name    string
+		policy *Policy
+		elapsed time.Duration
+		want    int
+	}{
+		{name: "policy A, elapsed time is halfway across a stage", policy: &pa, elapsed: 17 * time.Second, want: 4},
+		{name: "policy D, elapsed halfway across non-uniform stages", policy: &pd, elapsed: 45 * time.Second, want: 7},
+		{name: "policy B, very long elapsed time", policy: &pb, elapsed: 10000000 * time.Second, want: 100},
+		{name: "policy A, elapsed time lies spot-on stage boundary", policy: &pa, elapsed: 25 * time.Second, want: 6},
+		{name: "policy D, elapsed time lies spot-on final boundary", policy: &pd, elapsed: 160 * time.Second, want: 100},
+		{name: "Empty policy always return 100", policy: &p0, elapsed: 0, want: 100},
+		{name: "Unsorted policy doesn't affect result", policy: &pX, elapsed: 7 * time.Second, want: 70},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ans := computeNewPercentExplicit(tt.policy, tt.elapsed)
+			if ans != tt.want {
+				t.Errorf("wrong answer (got %v, want %v)", ans, tt.want)
+			}
+		})
+	}
+}
+
+func TestMetricTillNextStage(t *testing.T) {
+	var tests = []struct {
+		name    string
+		policy *Policy
+		elapsed time.Duration
+		want    int
+	}{
+		{name: "policy A, elapsed time is halfway across a stage", policy: &pa, elapsed: 17 * time.Second, want: 4},
+		{name: "policy D, elapsed halfway across non-uniform stages", policy: &pd, elapsed: 45 * time.Second, want: 16},
+		{name: "policy B, very long elapsed time", policy: &pb, elapsed: 10000000 * time.Second, want: math.MaxInt32},
+		{name: "policy A, elapsed time lies spot-on stage boundary", policy: &pa, elapsed: 25 * time.Second, want: 6},
+		{name: "policy D, elapsed time lies spot-on final boundary", policy: &pd, elapsed: 160 * time.Second, want: math.MaxInt32},
+		{name: "Empty policy always return MAX INT", policy: &p0, elapsed: 0, want: math.MaxInt32},
+		{name: "Unsorted policy doesn't affect result", policy: &pX, elapsed: 7 * time.Second, want: 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ans := metricTillNextStage(tt.policy, tt.elapsed)
+			if ans != tt.want {
+				t.Errorf("wrong answer (got %v, want %v)", ans, tt.want)
 			}
 		})
 	}
