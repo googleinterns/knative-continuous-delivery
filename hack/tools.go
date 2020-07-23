@@ -19,5 +19,6 @@ package tools
 
 // force go.mod to see these as dependencies
 import (
+	_ "k8s.io/code-generator"
 	_ "knative.dev/test-infra/scripts"
 )
