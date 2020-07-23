@@ -16,10 +16,10 @@ package delivery
 
 import (
 	"time"
+	"fmt"
 
 	"knative.dev/pkg/ptr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
-	listers "knative.dev/serving/pkg/client/listers/serving/v1"
 )
 
 /**************************************************************************************************************** 
@@ -33,7 +33,7 @@ import (
    - 1st value: a new route object whose spec field has been written with the desired state
    - 2nd value: error if anything goes wrong
 ****************************************************************************************************************/ 
-func modifyRouteSpec(route *v1.Route, r listers.RevisionLister, newRevName string, policy *Policy) (*v1.Route, error) {
+func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName string, policy *Policy) (*v1.Route, error) {
 	// assumption 1: the current Route Status traffic % are all non-zero (any zero entries would not have been written)
 	// assumption 2: the current Route Status traffic entries are ordered from oldest to newest Revision
 	// first identify whether or not newRevName is already in the pool
@@ -53,9 +53,9 @@ func modifyRouteSpec(route *v1.Route, r listers.RevisionLister, newRevName strin
 	}
 	if ln == 1 {
 		// when there's only 1 traffic target it can only be the newest Revision
-		newRevision, err := r.Revisions(route.Namespace).Get(newRevName)
-		if err != nil {
-			return route, err
+		newRevision, ok := r[newRevName]
+		if !ok {
+			return route, fmt.Errorf("cannot find Revision %s in indexer", newRevName)
 		}
 		route.Spec.Traffic = []v1.TrafficTarget{{
 			ConfigurationName: newRevision.OwnerReferences[0].Name,
@@ -76,9 +76,9 @@ func modifyRouteSpec(route *v1.Route, r listers.RevisionLister, newRevName strin
 	// go through the roster in reverse order (newest to oldest) and assign traffic to each Revision
 	alreadyAssigned := 0
 	for i := len(roster) - 1; i >= 0; i-- {
-		revision, err := r.Revisions(route.Namespace).Get(roster[i])
-		if err != nil {
-			return route, err
+		revision, ok := r[roster[i]]
+		if !ok {
+			return route, fmt.Errorf("cannot find Revision %s in indexer", roster[i])
 		}
 		// exception for the first ever Revision
 		if revision.Labels[RevisionGenerationKey] == "1" {
