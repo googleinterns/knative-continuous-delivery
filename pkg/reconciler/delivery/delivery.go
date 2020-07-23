@@ -17,6 +17,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 	"math"
 
@@ -27,6 +28,8 @@ import (
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	listers "knative.dev/serving/pkg/client/listers/serving/v1"
+
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 const (
@@ -85,6 +88,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 		return nil
 	}
 
+	// TODO: return delay from updateRoute and pull out the followup
 	return c.updateRoute(ctx, cfg)
 }
 
@@ -111,8 +115,16 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 	}
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
+	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	revisionMap := make(map[string]*v1.Revision) // mapping Revision names to objects
+	for _, rev := range revisionList {
+		revisionMap[rev.Name] = rev
+	}
 
-	route, err = modifyRouteSpec(route, c.revisionLister, latestReady, &policy)
+	route, err = modifyRouteSpec(route, revisionMap, latestReady, &policy)
 	if err != nil {
 		return err
 	}
@@ -129,7 +141,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		return nil
 	}
 
-	delay, err := timeTillNextEvent(route, c.revisionLister, &policy)
+	delay, err := timeTillNextEvent(route, revisionMap, &policy)
 	if err != nil {
 		return err
 	}
@@ -157,13 +169,13 @@ func min(items ...int) int {
 }
 
 // timeTillNextEvent calculates the time to wait before enqueueing the next event
-func timeTillNextEvent(route *v1.Route, r listers.RevisionLister, policy *Policy) (time.Duration, error) {
+func timeTillNextEvent(route *v1.Route, r map[string]*v1.Revision, policy *Policy) (time.Duration, error) {
 	result := math.MaxInt32
 	// compute how long each Revision would like to wait, and then take the minimum
 	for _, t := range route.Spec.Traffic {
-		revision, err := r.Revisions(route.Namespace).Get(t.RevisionName)
-		if err != nil {
-			return 0, err
+		revision, ok := r[t.RevisionName]
+		if !ok {
+			return 0, fmt.Errorf("cannot find Revision %s in indexer", t.RevisionName)
 		}
 		if revision.Labels[RevisionGenerationKey] == "1" {
 			continue

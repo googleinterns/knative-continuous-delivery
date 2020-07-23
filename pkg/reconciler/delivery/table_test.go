@@ -91,6 +91,21 @@ func Configuration(namespace, name string, co ...ConfigOption) *v1.Configuration
 	return c
 }
 
+// Revision creates a revision with RevisionOptions
+func Revision(namespace, name string, ro ...RevisionOption) *v1.Revision {
+	r := &v1.Revision{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+	for _, opt := range ro {
+		opt(r)
+	}
+	r.SetDefaults(context.Background())
+	return r
+}
+
 // this type is simply a convenient alias, see withTraffic funtion below for its purpose
 type pair struct {
 	name  string
