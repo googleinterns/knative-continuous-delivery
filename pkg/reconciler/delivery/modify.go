@@ -15,14 +15,14 @@
 package delivery
 
 import (
-	"time"
 	"fmt"
+	"time"
 
 	"knative.dev/pkg/ptr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 )
 
-/**************************************************************************************************************** 
+/****************************************************************************************************************
    modifyRouteSpec assigns traffic to all active Revisions according to the algorithm on page 8 of go/mydesigndoc
    arguments:
    - route: the current Route object
@@ -32,7 +32,7 @@ import (
    return values:
    - 1st value: a new route object whose spec field has been written with the desired state
    - 2nd value: error if anything goes wrong
-****************************************************************************************************************/ 
+****************************************************************************************************************/
 func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName string, policy *Policy) (*v1.Route, error) {
 	// assumption 1: the current Route Status traffic % are all non-zero (any zero entries would not have been written)
 	// assumption 2: the current Route Status traffic entries are ordered from oldest to newest Revision
@@ -59,8 +59,8 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 		}
 		route.Spec.Traffic = []v1.TrafficTarget{{
 			ConfigurationName: newRevision.OwnerReferences[0].Name,
-			LatestRevision: ptr.Bool(true),
-			Percent: ptr.Int64(100),
+			LatestRevision:    ptr.Bool(true),
+			Percent:           ptr.Int64(100),
 		}}
 		return route, nil
 	}
@@ -70,9 +70,9 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 		roster[i] = t.RevisionName
 	}
 	if len(route.Status.Traffic) < len(roster) {
-		roster[len(roster) - 1] = newRevName
+		roster[len(roster)-1] = newRevName
 	}
-	
+
 	// go through the roster in reverse order (newest to oldest) and assign traffic to each Revision
 	alreadyAssigned := 0
 	for i := len(roster) - 1; i >= 0; i-- {
@@ -83,20 +83,20 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 		// exception for the first ever Revision
 		if revision.Labels[RevisionGenerationKey] == "1" {
 			traffic[i] = v1.TrafficTarget{
-				RevisionName: roster[i],
+				RevisionName:   roster[i],
 				LatestRevision: ptr.Bool(false),
-				Percent: ptr.Int64(int64(100 - alreadyAssigned)),
+				Percent:        ptr.Int64(int64(100 - alreadyAssigned)),
 			}
 			break
 		}
 		timeElapsed := time.Since(revision.CreationTimestamp.Time)
 		want := computeNewPercentExplicit(policy, timeElapsed)
-		actual := min(want, 100 - alreadyAssigned)
+		actual := min(want, 100-alreadyAssigned)
 		alreadyAssigned += actual
 		traffic[i] = v1.TrafficTarget{
-			RevisionName: roster[i],
+			RevisionName:   roster[i],
 			LatestRevision: ptr.Bool(false),
-			Percent: ptr.Int64(int64(actual)),
+			Percent:        ptr.Int64(int64(actual)),
 		}
 		if alreadyAssigned >= 100 {
 			traffic = traffic[i:] // eliminate all redundant 0 entries
@@ -109,8 +109,8 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 	if len(traffic) == 1 {
 		traffic[0] = v1.TrafficTarget{
 			ConfigurationName: route.Name,
-			LatestRevision: ptr.Bool(true),
-			Percent: ptr.Int64(100),
+			LatestRevision:    ptr.Bool(true),
+			Percent:           ptr.Int64(100),
 		}
 	}
 

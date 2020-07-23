@@ -16,10 +16,9 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
-	"fmt"
-
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -65,7 +64,7 @@ func TestReconcile(t *testing.T) {
 			client:      servingclient.Get(ctx),
 			routeLister: listers.GetRouteLister(),
 			// note that we manually, systematically assigned unique namespace/name strings to each test Configuration
-			// we use those strings for each test 
+			// we use those strings for each test
 			followup: func(cfg *v1.Configuration, t time.Duration) {
 				key := cfg.GetNamespace() + "/" + cfg.GetName()
 				tr.OtherTestData[key] = fmt.Sprintf("%v", t)
@@ -117,9 +116,9 @@ func withTraffic(field string, nameValuePairs ...pair) RouteOption {
 	tt := make([]v1.TrafficTarget, len(nameValuePairs))
 	for i, pair := range nameValuePairs {
 		tt[i] = v1.TrafficTarget{
-			RevisionName: pair.name,
+			RevisionName:   pair.name,
 			LatestRevision: ptr.Bool(false),
-			Percent: ptr.Int64(pair.value),
+			Percent:        ptr.Int64(pair.value),
 		}
 	}
 	if len(nameValuePairs) == 1 {

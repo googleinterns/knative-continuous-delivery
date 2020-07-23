@@ -15,9 +15,9 @@
 package delivery
 
 import (
+	"math"
 	"testing"
 	"time"
-	"math"
 )
 
 var (
@@ -42,8 +42,8 @@ func intptr(x int) *int {
 func TestComputeNewPercent(t *testing.T) {
 	var tests = []struct {
 		name        string
-		policy     *Policy
-		cp          int  // (c)urrent (p)ercent
+		policy      *Policy
+		cp          int // (c)urrent (p)ercent
 		want        int
 		errExpected bool
 	}{
@@ -79,7 +79,7 @@ func TestComputeNewPercent(t *testing.T) {
 func TestGetThreshold(t *testing.T) {
 	var tests = []struct {
 		name        string
-		policy     *Policy
+		policy      *Policy
 		cp          int
 		want        int
 		errExpected bool
@@ -111,7 +111,7 @@ func TestGetThreshold(t *testing.T) {
 func TestComputeNewPercentExplicit(t *testing.T) {
 	var tests = []struct {
 		name    string
-		policy *Policy
+		policy  *Policy
 		elapsed time.Duration
 		want    int
 	}{
@@ -137,7 +137,7 @@ func TestComputeNewPercentExplicit(t *testing.T) {
 func TestMetricTillNextStage(t *testing.T) {
 	var tests = []struct {
 		name    string
-		policy *Policy
+		policy  *Policy
 		elapsed time.Duration
 		want    int
 	}{

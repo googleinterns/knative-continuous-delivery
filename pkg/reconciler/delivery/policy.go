@@ -15,12 +15,11 @@
 package delivery
 
 import (
-	"sort"
 	"fmt"
-	"time"
 	"math"
+	"sort"
+	"time"
 )
-
 
 // Policy represents the rollout strategy used to update Route objects
 type Policy struct {
@@ -39,7 +38,7 @@ type Policy struct {
 	Stages []Stage
 
 	// DefaultThreshold is the threshold value that is used when a rollout stage doesn't specify
-	// a threshold of its own; this can be useful when the threshold is a constant value across 
+	// a threshold of its own; this can be useful when the threshold is a constant value across
 	// all rollout stages, in which case there is no need to copy paste the same value in all entries
 	// The interpretation of DefaultThreshold depends on the value of Mode
 	DefaultThreshold int
@@ -47,7 +46,7 @@ type Policy struct {
 
 // Stage contains information about a progressive rollout stage
 type Stage struct {
-	Percent    int
+	Percent   int
 	Threshold *int
 }
 
@@ -58,10 +57,10 @@ func computeNewPercent(p *Policy, currentPercent int) (int, error) {
 		return p.Stages[i].Percent >= currentPercent
 	})
 	if i < len(p.Stages) && p.Stages[i].Percent == currentPercent {
-		if i == len(p.Stages) - 1 {
+		if i == len(p.Stages)-1 {
 			return 100, nil
 		}
-		return p.Stages[i + 1].Percent, nil
+		return p.Stages[i+1].Percent, nil
 	}
 	return 0, fmt.Errorf("invalid percentage for current rollout stage")
 }
@@ -119,7 +118,7 @@ func metricTillNextStage(p *Policy, elapsed time.Duration) int {
 		}
 		metricCumulative += extra
 		if float64(metricCumulative) > metric {
-			return int(float64(metricCumulative) - metric) + 1 // +1 deals with float truncating
+			return int(float64(metricCumulative)-metric) + 1 // +1 deals with float truncating
 		}
 	}
 	return math.MaxInt32
