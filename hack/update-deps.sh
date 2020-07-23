@@ -27,7 +27,7 @@ go mod vendor
 find vendor/ -name 'OWNERS' -delete
 find vendor/ -name '*_test.go' -delete
 
-update_licenses third_party/VENDOR-LICENSE "./..."
+update_licenses "./third_party/VENDOR-LICENSE" "./cmd/..."
 
 remove_broken_symlinks ./vendor
 
