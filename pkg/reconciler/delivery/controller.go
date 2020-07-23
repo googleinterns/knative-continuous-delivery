@@ -27,8 +27,8 @@ import (
 	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/route"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	servingreconciler "knative.dev/serving/pkg/reconciler"
 )
@@ -45,9 +45,9 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	revisionInformer := revisioninformer.Get(ctx)
 
 	c := &Reconciler{
-		client:              servingclient.Get(ctx),
-		routeLister:         routeInformer.Lister(),
-		revisionLister:      revisionInformer.Lister(),
+		client:         servingclient.Get(ctx),
+		routeLister:    routeInformer.Lister(),
+		revisionLister: revisionInformer.Lister(),
 	}
 	impl := configurationreconciler.NewImpl(ctx, c)
 	// a little hack that allows the reconciler to queue an event for future processing by itself
