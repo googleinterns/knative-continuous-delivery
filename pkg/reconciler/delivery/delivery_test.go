@@ -232,6 +232,20 @@ func TestModifyRouteSpec(t *testing.T) {
 		want: Route("default", "test", withTraffic("status", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7}),
 			withTraffic("spec", pair{"R2", 93}, pair{"R3", 7})),
 		errExpected: false,
+	}, {
+		name:  "oldest revision always ignores progression/timer",
+		route: Route("default", "test", withTraffic("status", pair{"R1", 99}, pair{"R2", 1})),
+		revMap: map[string]*v1.Revision{
+			"R1": Revision("default", "R1", WithCreationTimestamp(time.Now().Add(-125*time.Second)),
+				WithRevisionLabel(RevisionGenerationKey, "1")),
+			"R2": Revision("default", "R2", WithCreationTimestamp(time.Now().Add(-61500*time.Millisecond)),
+				WithRevisionLabel(RevisionGenerationKey, "2")),
+		},
+		newRevName: "R2",
+		policy:     &policy,
+		want: Route("default", "test", withTraffic("status", pair{"R1", 99}, pair{"R2", 1}),
+			withTraffic("spec", pair{"R1", 90}, pair{"R2", 10})),
+		errExpected: false,
 	}}
 
 	for _, tt := range tests {

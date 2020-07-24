@@ -55,6 +55,7 @@ type Reconciler struct {
 	routeLister    listers.RouteLister
 	revisionLister listers.RevisionLister
 	followup       enqueueFunc
+	// TODO: use the k8s clock interface for time provider
 }
 
 // private aliases for the types in Reconciler
@@ -113,6 +114,8 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 	}
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
+	// TODO: do not list ALL revisions in namespace; list only those for the cfg
+	// selector := labels.SelectorFromSet(labels.Set{serving.ConfigurationLabelKey: config.Name})
 	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(labels.Everything())
 	if err != nil {
 		return err
