@@ -7,7 +7,7 @@ go:
 before_script:
   - go get golang.org/x/lint/golint
 script:
-  - test -z "$(gofmt -s -l cmd/ pkg/)" || (echo "formatting failed run `gofmt -s -w cmd/ pkg/`" && exit 1)
+  - test -z "$(gofmt -s -l cmd/ pkg/)" || (echo "formatting failed. run `gofmt -s -w cmd/ pkg/` to fix." && exit 1)
   - golint -set_exit_status cmd/... pkg/...
   - go test -v ./cmd/... ./pkg/...
 env:
