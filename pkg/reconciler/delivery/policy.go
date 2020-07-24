@@ -104,6 +104,7 @@ func computeNewPercentExplicit(p *Policy, elapsed time.Duration) int {
 }
 
 // metricTillNextStage computes how much time (full seconds) to wait before progressing to the next stage
+// the returned result in full seconds MUST be STRICTLY bigger than the actual time to wait
 func metricTillNextStage(p *Policy, elapsed time.Duration) int {
 	// when no stages are specified, we assume that the final stage is reached immediately after initiation
 	if len(p.Stages) == 0 {
@@ -118,8 +119,13 @@ func metricTillNextStage(p *Policy, elapsed time.Duration) int {
 		}
 		metricCumulative += extra
 		if float64(metricCumulative) > metric {
-			return int(float64(metricCumulative)-metric) + 1 // +1 deals with float truncating
+			return nextBiggerInt(float64(metricCumulative) - metric)
 		}
 	}
 	return math.MaxInt32
+}
+
+// nextBiggerInt computes the next STRICTLY bigger int for a float64 number
+func nextBiggerInt(f float64) int {
+	return int(f) + 1
 }
