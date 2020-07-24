@@ -18,15 +18,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 	"math"
+	"time"
 
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
 	"knative.dev/pkg/logging"
-	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	pkgreconciler "knative.dev/pkg/reconciler"
+	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	listers "knative.dev/serving/pkg/client/listers/serving/v1"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -55,11 +55,11 @@ type Reconciler struct {
 	routeLister    listers.RouteLister
 	revisionLister listers.RevisionLister
 	followup       enqueueFunc
+	// TODO: use the k8s clock interface for time provider
 }
 
 // private aliases for the types in Reconciler
 type enqueueFunc func(*v1.Configuration, time.Duration)
-
 
 // Check that our Reconciler implements ksvcreconciler.Interface
 var _ configurationreconciler.Interface = (*Reconciler)(nil)
@@ -68,12 +68,11 @@ var (
 	// we use a global variable for now because we assume for simplicity that all Configurations
 	// use the same policy; in the future, we might want to associate a policy to each Configuration
 	policy Policy = Policy{
-		Mode: "time",
-		Stages: []Stage{{0, nil}, {1, nil}, {10, nil}, {20, nil}, {90, nil}},
+		Mode:             "time",
+		Stages:           []Stage{{0, nil}, {1, nil}, {10, nil}, {20, nil}, {90, nil}},
 		DefaultThreshold: 60,
 	}
 )
-
 
 // ReconcileKind is triggered to enforce the rollout policy
 func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) pkgreconciler.Event {
@@ -115,6 +114,8 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 	}
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
+	// TODO: do not list ALL revisions in namespace; list only those for the cfg
+	// selector := labels.SelectorFromSet(labels.Set{serving.ConfigurationLabelKey: config.Name})
 	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(labels.Everything())
 	if err != nil {
 		return err

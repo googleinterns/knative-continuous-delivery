@@ -86,3 +86,8 @@ func (l *Listers) GetRouteLister() servinglisters.RouteLister {
 func (l *Listers) GetConfigurationLister() servinglisters.ConfigurationLister {
 	return servinglisters.NewConfigurationLister(l.IndexerFor(&v1.Configuration{}))
 }
+
+// GetRevisionLister returns the RevisionLister
+func (l *Listers) GetRevisionLister() servinglisters.RevisionLister {
+	return servinglisters.NewRevisionLister(l.IndexerFor(&v1.Revision{}))
+}
