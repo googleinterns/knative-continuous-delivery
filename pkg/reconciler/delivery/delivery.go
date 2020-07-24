@@ -26,10 +26,12 @@ import (
 
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
+	"knative.dev/serving/pkg/apis/serving"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	listers "knative.dev/serving/pkg/client/listers/serving/v1"
 
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/clock"
 )
 
 const (
@@ -39,10 +41,6 @@ const (
 	KCDNamespace = "knative-serving"
 	// KCDName is the name of this project
 	KCDName = "knative-continuous-delivery"
-	// AnnotationKey is the string used in ObjectMeta.Annotations map for any Route object
-	AnnotationKey = "KCDLastRouteUpdate"
-	// RevisionGenerationKey is the label key for querying how "old" a Revision is
-	RevisionGenerationKey = "serving.knative.dev/configurationGeneration"
 	// WaitForReady makes sure that when a newly created Revision becomes ready, it triggers the reconciler
 	WaitForReady = 5 * time.Second
 	// TimeFormat specifies the format used by time.Parse and time.Format
@@ -55,7 +53,7 @@ type Reconciler struct {
 	routeLister    listers.RouteLister
 	revisionLister listers.RevisionLister
 	followup       enqueueFunc
-	// TODO: use the k8s clock interface for time provider
+	clock          clock.Clock
 }
 
 // private aliases for the types in Reconciler
@@ -87,7 +85,6 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 		return nil
 	}
 
-	// TODO: return delay from updateRoute and pull out the followup
 	return c.updateRoute(ctx, cfg)
 }
 
@@ -110,13 +107,13 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 
 	r, err := c.routeLister.Routes(cfg.Namespace).Get(cfg.Name)
 	if err != nil {
+		logger.Info("Failed to find Route object, potentially due to namespace/name mismatch between Configuration and Route")
 		return err
 	}
 	route := r.DeepCopy()
 	latestReady := cfg.Status.LatestReadyRevisionName
-	// TODO: do not list ALL revisions in namespace; list only those for the cfg
-	// selector := labels.SelectorFromSet(labels.Set{serving.ConfigurationLabelKey: config.Name})
-	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(labels.Everything())
+	selector := labels.SelectorFromSet(labels.Set{serving.ConfigurationLabelKey: cfg.Name})
+	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(selector)
 	if err != nil {
 		return err
 	}
@@ -125,7 +122,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		revisionMap[rev.Name] = rev
 	}
 
-	route, err = modifyRouteSpec(route, revisionMap, latestReady, &policy)
+	route, err = modifyRouteSpec(route, revisionMap, latestReady, &policy, c.clock)
 	if err != nil {
 		return err
 	}
@@ -142,7 +139,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		return nil
 	}
 
-	delay, err := timeTillNextEvent(route, revisionMap, &policy)
+	delay, err := timeTillNextEvent(route, revisionMap, &policy, c.clock)
 	if err != nil {
 		return err
 	}
@@ -170,19 +167,33 @@ func min(items ...int) int {
 }
 
 // timeTillNextEvent calculates the time to wait before enqueueing the next event
-func timeTillNextEvent(route *v1.Route, r map[string]*v1.Revision, policy *Policy) (time.Duration, error) {
+func timeTillNextEvent(route *v1.Route, r map[string]*v1.Revision, policy *Policy, clock clock.Clock) (time.Duration, error) {
 	result := math.MaxInt32
+	oldest := oldestRevision(r)
 	// compute how long each Revision would like to wait, and then take the minimum
 	for _, t := range route.Spec.Traffic {
 		revision, ok := r[t.RevisionName]
 		if !ok {
 			return 0, fmt.Errorf("cannot find Revision %s in indexer", t.RevisionName)
 		}
-		if revision.Labels[RevisionGenerationKey] == "1" {
+		if revision == oldest {
 			continue
 		}
-		timeElapsed := time.Since(revision.CreationTimestamp.Time)
+		timeElapsed := clock.Since(revision.CreationTimestamp.Time)
 		result = min(metricTillNextStage(policy, timeElapsed), result)
 	}
 	return time.Duration(result) * time.Second, nil
+}
+
+// oldestRevision returns the oldest revision (as determined by creation timestamp)
+func oldestRevision(r map[string]*v1.Revision) *v1.Revision {
+	var result *v1.Revision
+	earliest := time.Unix(1<<63-62135596801, 999999999) // max possible time representable using time.Time
+	for _, rev := range r {
+		if rev.CreationTimestamp.Time.Before(earliest) {
+			earliest = rev.CreationTimestamp.Time
+			result = rev
+		}
+	}
+	return result
 }

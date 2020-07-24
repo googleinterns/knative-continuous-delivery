@@ -16,8 +16,8 @@ package delivery
 
 import (
 	"fmt"
-	"time"
 
+	"k8s.io/apimachinery/pkg/util/clock"
 	"knative.dev/pkg/ptr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 )
@@ -33,7 +33,7 @@ import (
    - 1st value: a new route object whose spec field has been written with the desired state
    - 2nd value: error if anything goes wrong
 ****************************************************************************************************************/
-func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName string, policy *Policy) (*v1.Route, error) {
+func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName string, policy *Policy, clock clock.Clock) (*v1.Route, error) {
 	// assumption 1: the current Route Status traffic % are all non-zero (any zero entries would not have been written)
 	// assumption 2: the current Route Status traffic entries are ordered from oldest to newest Revision
 	// first identify whether or not newRevName is already in the pool
@@ -75,13 +75,14 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 
 	// go through the roster in reverse order (newest to oldest) and assign traffic to each Revision
 	alreadyAssigned := 0
+	oldest := oldestRevision(r)
 	for i := len(roster) - 1; i >= 0; i-- {
 		revision, ok := r[roster[i]]
 		if !ok {
 			return route, fmt.Errorf("cannot find Revision %s in indexer", roster[i])
 		}
-		// exception for the first ever Revision
-		if revision.Labels[RevisionGenerationKey] == "1" {
+		// exception for the oldest Revision
+		if revision == oldest {
 			traffic[i] = v1.TrafficTarget{
 				RevisionName:   roster[i],
 				LatestRevision: ptr.Bool(false),
@@ -89,7 +90,7 @@ func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName stri
 			}
 			break
 		}
-		timeElapsed := time.Since(revision.CreationTimestamp.Time)
+		timeElapsed := clock.Since(revision.CreationTimestamp.Time)
 		want := computeNewPercentExplicit(policy, timeElapsed)
 		actual := min(want, 100-alreadyAssigned)
 		alreadyAssigned += actual

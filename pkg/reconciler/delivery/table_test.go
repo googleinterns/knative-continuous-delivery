@@ -22,11 +22,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/clock"
 	clientgotesting "k8s.io/client-go/testing"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/ptr"
+	"knative.dev/serving/pkg/apis/serving"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
@@ -39,6 +41,7 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
+	now := time.Now()
 	table := TableTest{{
 		Name: "bad workqueue key",
 		// Make sure Reconcile handles bad keys.
@@ -69,10 +72,10 @@ func TestReconcile(t *testing.T) {
 		Objects: []runtime.Object{
 			Route("default", "test3", withTraffic("status", pair{"R1", 99}, pair{"R2", 1})),
 			Configuration("default", "test3", WithLatestCreated("R2"), WithLatestReady("R2")),
-			Revision("default", "R1", WithCreationTimestamp(time.Now().Add(-125*time.Second)),
-				WithRevisionLabel(RevisionGenerationKey, "1")),
-			Revision("default", "R2", WithCreationTimestamp(time.Now().Add(-61100*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "2")),
+			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
+			Revision("default", "R2", WithCreationTimestamp(now.Add(-61100*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
 			Object: Route("default", "test3", withTraffic("status", pair{"R1", 99}, pair{"R2", 1}),
@@ -87,20 +90,20 @@ func TestReconcile(t *testing.T) {
 		Objects: []runtime.Object{
 			Route("default", "test4", withTraffic("status", pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1})),
 			Configuration("default", "test4", WithLatestCreated("R7"), WithLatestReady("R7")),
-			Revision("default", "R1", WithCreationTimestamp(time.Now().Add(-125*time.Second)),
-				WithRevisionLabel(RevisionGenerationKey, "1")),
-			Revision("default", "R2", WithCreationTimestamp(time.Now().Add(-121500*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "2")),
-			Revision("default", "R3", WithCreationTimestamp(time.Now().Add(-121500*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "3")),
-			Revision("default", "R4", WithCreationTimestamp(time.Now().Add(-121500*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "4")),
-			Revision("default", "R5", WithCreationTimestamp(time.Now().Add(-121500*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "5")),
-			Revision("default", "R6", WithCreationTimestamp(time.Now().Add(-62100*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "6")),
-			Revision("default", "R7", WithCreationTimestamp(time.Now().Add(-61500*time.Millisecond)),
-				WithRevisionLabel(RevisionGenerationKey, "7")),
+			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R2", WithCreationTimestamp(now.Add(-121500*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R3", WithCreationTimestamp(now.Add(-121500*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R4", WithCreationTimestamp(now.Add(-121500*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R5", WithCreationTimestamp(now.Add(-121500*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R6", WithCreationTimestamp(now.Add(-62100*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			Revision("default", "R7", WithCreationTimestamp(now.Add(-61500*time.Millisecond)),
+				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
 			Object: Route("default", "test4", withTraffic("status", pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1}),
@@ -116,6 +119,7 @@ func TestReconcile(t *testing.T) {
 			client:         servingclient.Get(ctx),
 			routeLister:    listers.GetRouteLister(),
 			revisionLister: listers.GetRevisionLister(),
+			clock:          clock.NewFakeClock(now),
 			// note that we manually, systematically assigned unique namespace/name strings to each test Configuration
 			// we use those strings for each test
 			followup: func(cfg *v1.Configuration, t time.Duration) {
