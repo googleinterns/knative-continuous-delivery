@@ -261,6 +261,31 @@ golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # gomodules.xyz/jsonpatch/v2 v2.1.0
 gomodules.xyz/jsonpatch/v2
+# gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485
+gonum.org/v1/gonum/blas
+gonum.org/v1/gonum/blas/blas64
+gonum.org/v1/gonum/blas/cblas128
+gonum.org/v1/gonum/blas/gonum
+gonum.org/v1/gonum/floats
+gonum.org/v1/gonum/graph
+gonum.org/v1/gonum/graph/internal/linear
+gonum.org/v1/gonum/graph/internal/ordered
+gonum.org/v1/gonum/graph/internal/set
+gonum.org/v1/gonum/graph/internal/uid
+gonum.org/v1/gonum/graph/iterator
+gonum.org/v1/gonum/graph/simple
+gonum.org/v1/gonum/graph/topo
+gonum.org/v1/gonum/graph/traverse
+gonum.org/v1/gonum/internal/asm/c128
+gonum.org/v1/gonum/internal/asm/c64
+gonum.org/v1/gonum/internal/asm/f32
+gonum.org/v1/gonum/internal/asm/f64
+gonum.org/v1/gonum/internal/cmplx64
+gonum.org/v1/gonum/internal/math32
+gonum.org/v1/gonum/lapack
+gonum.org/v1/gonum/lapack/gonum
+gonum.org/v1/gonum/lapack/lapack64
+gonum.org/v1/gonum/mat
 # google.golang.org/api v0.28.0
 google.golang.org/api/internal
 google.golang.org/api/iterator
@@ -699,7 +724,7 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
-# k8s.io/code-generator v0.18.0
+# k8s.io/code-generator v0.18.0 => k8s.io/code-generator v0.17.6
 ## explicit
 k8s.io/code-generator
 k8s.io/code-generator/cmd/client-gen
@@ -748,6 +773,8 @@ k8s.io/gengo/types
 # k8s.io/klog v1.0.0
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20200410145947-bcb3869e6f29
+## explicit
+k8s.io/kube-openapi/cmd/openapi-gen
 k8s.io/kube-openapi/cmd/openapi-gen/args
 k8s.io/kube-openapi/pkg/common
 k8s.io/kube-openapi/pkg/generators
@@ -783,7 +810,7 @@ knative.dev/networking/pkg/client/injection/client
 knative.dev/networking/pkg/client/injection/client/fake
 knative.dev/networking/pkg/client/istio/listers/networking/v1alpha3
 knative.dev/networking/pkg/client/listers/networking/v1alpha1
-# knative.dev/pkg v0.0.0-20200708171447-5358179e7499
+# knative.dev/pkg v0.0.0-20200702222342-ea4d6e985ba0
 ## explicit
 knative.dev/pkg/apis
 knative.dev/pkg/apis/duck
@@ -796,8 +823,12 @@ knative.dev/pkg/client/injection/kube/client
 knative.dev/pkg/client/injection/kube/client/fake
 knative.dev/pkg/client/injection/kube/informers/admissionregistration/v1/mutatingwebhookconfiguration
 knative.dev/pkg/client/injection/kube/informers/factory
+knative.dev/pkg/codegen/cmd/injection-gen
+knative.dev/pkg/codegen/cmd/injection-gen/args
+knative.dev/pkg/codegen/cmd/injection-gen/generators
 knative.dev/pkg/configmap
 knative.dev/pkg/controller
+knative.dev/pkg/hack
 knative.dev/pkg/injection
 knative.dev/pkg/injection/clients/dynamicclient
 knative.dev/pkg/injection/clients/dynamicclient/fake
@@ -892,3 +923,4 @@ sigs.k8s.io/yaml
 # k8s.io/api => k8s.io/api v0.17.6
 # k8s.io/apimachinery => k8s.io/apimachinery v0.17.6
 # k8s.io/client-go => k8s.io/client-go v0.17.6
+# k8s.io/code-generator => k8s.io/code-generator v0.17.6

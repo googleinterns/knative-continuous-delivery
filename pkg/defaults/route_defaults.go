@@ -17,8 +17,10 @@ package defaults
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"knative.dev/pkg/logging"
 
+	policystateinformer "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 	"knative.dev/pkg/apis"
 	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
 )
@@ -40,6 +42,12 @@ var (
 func (cdr *ContinuousDeploymentRoute) SetDefaults(ctx context.Context) {
 	logger := logging.FromContext(ctx)
 	logger.Infof("SetDefaults called for %v", *cdr)
+	policyStateInformer := policystateinformer.Get(ctx)
+	policyStateLister := policyStateInformer.Lister()
+	policyStates, err := policyStateLister.PolicyStates(cdr.Namespace).List(labels.Everything())
+	logger.Infof("Response err %v", err)
+	logger.Infof("Response policyStates %v", policyStates)
+
 }
 
 // Validate returns nil due to no need for validation

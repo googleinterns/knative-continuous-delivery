@@ -1,3 +1,5 @@
+// +build tools
+
 /*
 Copyright 2020 Google LLC
 
@@ -13,7 +15,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build tools
 
 package tools
 
@@ -21,4 +22,15 @@ package tools
 import (
 	_ "k8s.io/code-generator"
 	_ "knative.dev/test-infra/scripts"
+
+	// codegen: hack/generate-knative.sh
+	_ "knative.dev/pkg/hack"
+
+	_ "k8s.io/code-generator/cmd/client-gen"
+	_ "k8s.io/code-generator/cmd/deepcopy-gen"
+	_ "k8s.io/code-generator/cmd/defaulter-gen"
+	_ "k8s.io/code-generator/cmd/informer-gen"
+	_ "k8s.io/code-generator/cmd/lister-gen"
+	_ "k8s.io/kube-openapi/cmd/openapi-gen"
+	_ "knative.dev/pkg/codegen/cmd/injection-gen"
 )
