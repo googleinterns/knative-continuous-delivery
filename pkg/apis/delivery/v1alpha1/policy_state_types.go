@@ -23,17 +23,18 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// PolicyState is
+// PolicyState is used by KCD controller to communicate routing information to the
+// mutating webhook in order to sideline the Service reconciler
 type PolicyState struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec holds the desired state of the PolicyState (from the client).
+	// Spec holds info about what the routing state SHOULD be
 	// +optional
 	Spec PolicyStateSpec `json:"spec,omitempty"`
 
-	// Status communicates the observed state of the PolicyState (from the controller).
+	// Status holds info about what routing state has been written by the webhook
 	// +optional
 	Status PolicyStateStatus `json:"status,omitempty"`
 }
@@ -44,7 +45,8 @@ var (
 	_ duckv1.KRShaped = (*PolicyState)(nil)
 )
 
-// PolicyStateSpec holds the desired state of the PolicyState (from the client).
+// PolicyStateSpec holds the desired state of the PolicyState
+// Should be set by reconciler, and used by webhook to write Route appropriately
 type PolicyStateSpec struct {
 	// TODO: implement policy state spec
 }
@@ -56,7 +58,8 @@ type PolicyStateStatusFields struct {
 	// TODO: implement policy state status
 }
 
-// PolicyStateStatus communicates the observed state of the PolicyState (from the controller).
+// PolicyStateStatus communicates the observed state of the PolicyState
+// Should be set by the webhook
 type PolicyStateStatus struct {
 	duckv1.Status `json:",inline"`
 

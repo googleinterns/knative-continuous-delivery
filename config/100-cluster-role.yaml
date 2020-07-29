@@ -1,0 +1,11 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: knative-serving-delivery
+  labels:
+    serving.knative.dev/release: devel
+    serving.knative.dev/controller: "true"
+rules:
+  - apiGroups: ["delivery.knative.dev"]
+    resources: ["*", "*/status", "*/finalizers"]
+    verbs: ["get", "list", "create", "update", "delete", "deletecollection", "patch", "watch"]
