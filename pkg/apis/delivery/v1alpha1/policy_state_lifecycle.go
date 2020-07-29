@@ -19,6 +19,9 @@ import (
 	"knative.dev/pkg/apis"
 )
 
+// TODO: what conditions should be emitted in the Status?
+// - need to surface downstream dependency, Route in this case; need to know if Route is failing, or whatever
+//   - this makes a more friendly UX, easier for user to debug why their thing isn't working
 var policyStateCondSet = apis.NewLivingConditionSet()
 
 // GetConditionSet retrieves the condition set for this resource. Implements the KRShaped interface.

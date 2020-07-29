@@ -22,6 +22,7 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 
+	policystateinformer "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	routeinformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/route"
@@ -44,12 +45,14 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	logger := logging.FromContext(ctx)
 	routeInformer := routeinformer.Get(ctx)
 	revisionInformer := revisioninformer.Get(ctx)
+	policystateInformer := policystateinformer.Get(ctx)
 
 	c := &Reconciler{
-		client:         servingclient.Get(ctx),
-		routeLister:    routeInformer.Lister(),
-		revisionLister: revisionInformer.Lister(),
-		clock:          clock.RealClock{},
+		client:            servingclient.Get(ctx),
+		routeLister:       routeInformer.Lister(),
+		revisionLister:    revisionInformer.Lister(),
+		policystateLister: policystateInformer.Lister(),
+		clock:             clock.RealClock{},
 	}
 	impl := configurationreconciler.NewImpl(ctx, c)
 	// a little hack that allows the reconciler to queue an event for future processing by itself

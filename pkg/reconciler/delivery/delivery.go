@@ -24,6 +24,7 @@ import (
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
+	v1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/serving/pkg/apis/serving"
@@ -49,11 +50,12 @@ const (
 
 // Reconciler implements controller.Reconciler
 type Reconciler struct {
-	client         clientset.Interface
-	routeLister    listers.RouteLister
-	revisionLister listers.RevisionLister
-	followup       enqueueFunc
-	clock          clock.Clock
+	client            clientset.Interface
+	routeLister       listers.RouteLister
+	revisionLister    listers.RevisionLister
+	policystateLister v1alpha1.PolicyStateLister
+	followup          enqueueFunc
+	clock             clock.Clock
 }
 
 // private aliases for the types in Reconciler

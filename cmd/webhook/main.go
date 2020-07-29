@@ -31,6 +31,8 @@ import (
 
 	defaultconfig "knative.dev/serving/pkg/apis/config"
 	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
+
+	policystate "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 )
 
 var types = map[schema.GroupVersionKind]resourcesemantics.GenericCRD{
@@ -54,8 +56,9 @@ func newDefaultingAdmissionController(ctx context.Context, cmw configmap.Watcher
 		types,
 
 		// A function that infuses the context passed to Validate/SetDefaults with custom metadata.
-		func(ctx context.Context) context.Context {
-			return ctx
+		func(c context.Context) context.Context {
+			inf := policystate.Get(ctx)
+			return context.WithValue(c, policystate.Key{}, inf)
 		},
 
 		// Whether to disallow unknown fields.
