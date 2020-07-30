@@ -18,6 +18,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+
+	"knative.dev/pkg/apis"
+	"knative.dev/serving/pkg/apis/serving/v1"
 )
 
 // +genclient
@@ -45,17 +48,33 @@ var (
 	_ duckv1.KRShaped = (*PolicyState)(nil)
 )
 
-// PolicyStateSpec holds the desired state of the PolicyState
-// Should be set by reconciler, and used by webhook to write Route appropriately
+const (
+	// PolicyStateConditionRouteConfigured is set to false if any failure prevents
+	// PolicyState.Spec from being written to Route.Spec
+	PolicyStateConditionRouteConfigured apis.ConditionType = "RouteConfigured"
+)
+
+// PolicyStateSpec holds the desired routing spec computed by reconciler
+// Should be set by reconciler, and set by webhook to write Route appropriately
 type PolicyStateSpec struct {
-	// TODO: implement policy state spec
+	// Traffic specifies how to distribute traffic over a collection of
+	// revisions and configurations.
+	Traffic []v1.TrafficTarget `json:"traffic,omitempty"`
 }
 
 // PolicyStateStatusFields holds the fields of PolicyState's status that
 // are not generally shared.  This is defined separately and inlined so that
 // other types can readily consume these fields via duck typing.
 type PolicyStateStatusFields struct {
-	// TODO: implement policy state status
+	// NextUpdateTimestamp specifies the next time when this PolicyState spec should be updated
+	// it is used in conjunction with EnqueueAfter to help reconciler enforce time-based policies
+	// it also helps prevent unexpected rollout behavior when controller restarts, etc.
+	// optional because when a rollout is completed there is no more future updates to be done
+	NextUpdateTimestamp *metav1.Time `json:"nextUpdateTimestamp,omitempty"`
+
+	// Traffic describes the current routing spec that the webhook has enforced
+	// If this doesn't agree with Spec.Traffic, then the webhook SetDefaults must set them to agree with each other
+	Traffic []v1.TrafficTarget `json:"traffic,omitempty"`
 }
 
 // PolicyStateStatus communicates the observed state of the PolicyState

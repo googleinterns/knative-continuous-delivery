@@ -19,10 +19,9 @@ import (
 	"knative.dev/pkg/apis"
 )
 
-// TODO: what conditions should be emitted in the Status?
-// - need to surface downstream dependency, Route in this case; need to know if Route is failing, or whatever
-//   - this makes a more friendly UX, easier for user to debug why their thing isn't working
-var policyStateCondSet = apis.NewLivingConditionSet()
+var policyStateCondSet = apis.NewLivingConditionSet(
+	PolicyStateConditionRouteConfigured,
+)
 
 // GetConditionSet retrieves the condition set for this resource. Implements the KRShaped interface.
 func (*PolicyState) GetConditionSet() apis.ConditionSet {
@@ -42,4 +41,11 @@ func (pss *PolicyStateStatus) IsReady() bool {
 // InitializeConditions sets the initial values to the conditions.
 func (pss *PolicyStateStatus) InitializeConditions() {
 	policyStateCondSet.Manage(pss).InitializeConditions()
+}
+
+// MarkRouteNotConfigured sets the condition value to false
+func (pss *PolicyStateStatus) MarkRouteNotConfigured(name string) {
+	policyStateCondSet.Manage(pss).MarkFalse(PolicyStateConditionRouteConfigured,
+		"RouteNotConfigured",
+		"Failed to write Route spec to Route %q", name)
 }
