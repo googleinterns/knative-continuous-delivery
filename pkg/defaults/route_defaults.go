@@ -17,9 +17,10 @@ package defaults
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/labels"
 	"knative.dev/pkg/logging"
 
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
+	deliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client"
 	policystateinformer "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 	"knative.dev/pkg/apis"
 	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
@@ -41,13 +42,28 @@ var (
 // SetDefaults implements apis.Defaultable
 func (cdr *ContinuousDeploymentRoute) SetDefaults(ctx context.Context) {
 	logger := logging.FromContext(ctx)
-	logger.Infof("SetDefaults called for %v", *cdr)
 	policyStateInformer := policystateinformer.Get(ctx)
 	policyStateLister := policyStateInformer.Lister()
-	policyStates, err := policyStateLister.PolicyStates(cdr.Namespace).List(labels.Everything())
-	logger.Infof("Response err %v", err)
-	logger.Infof("Response policyStates %v", policyStates)
+	ps, err := policyStateLister.PolicyStates(cdr.Namespace).Get(cdr.Name)
+	if err != nil {
+		return
+	}
+	logger.Infof("Received PolicyState %v", *ps)
 
+	cdr.copyRouteSpec(ps)
+
+	// update PolicyState status field
+	ps.Status.Traffic = ps.Spec.Traffic
+	_, err = deliveryclient.Get(ctx).DeliveryV1alpha1().PolicyStates(cdr.Namespace).Update(ps)
+	if err != nil {
+		logger.Infof("Failed to update PolicyState")
+	}
+}
+
+func (cdr *ContinuousDeploymentRoute) copyRouteSpec(ps *v1alpha1.PolicyState) {
+	cdr.Spec = servingv1.RouteSpec{
+		Traffic: ps.Spec.Traffic,
+	}
 }
 
 // Validate returns nil due to no need for validation

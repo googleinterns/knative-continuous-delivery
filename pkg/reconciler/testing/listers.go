@@ -15,6 +15,9 @@
 package testing
 
 import (
+	v1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
+	fakedeliveryclientset "github.com/googleinterns/knative-continuous-delivery/pkg/client/clientset/versioned/fake"
+	deliverylisters "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	fakekubeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -27,6 +30,7 @@ import (
 var clientSetSchemes = []func(*runtime.Scheme) error{
 	fakekubeclientset.AddToScheme,
 	fakeservingclientset.AddToScheme,
+	fakedeliveryclientset.AddToScheme,
 }
 
 // Listers holds sorters
@@ -77,6 +81,11 @@ func (l *Listers) GetServingObjects() []runtime.Object {
 	return l.sorter.ObjectsForSchemeFunc(fakeservingclientset.AddToScheme)
 }
 
+// GetDeliveryObjects returns the delivery objects
+func (l *Listers) GetDeliveryObjects() []runtime.Object {
+	return l.sorter.ObjectsForSchemeFunc(fakedeliveryclientset.AddToScheme)
+}
+
 // GetRouteLister returns the RouteLister
 func (l *Listers) GetRouteLister() servinglisters.RouteLister {
 	return servinglisters.NewRouteLister(l.IndexerFor(&v1.Route{}))
@@ -90,4 +99,9 @@ func (l *Listers) GetConfigurationLister() servinglisters.ConfigurationLister {
 // GetRevisionLister returns the RevisionLister
 func (l *Listers) GetRevisionLister() servinglisters.RevisionLister {
 	return servinglisters.NewRevisionLister(l.IndexerFor(&v1.Revision{}))
+}
+
+// GetPolicyStateLister returns the PolicyStateLister
+func (l *Listers) GetPolicyStateLister() deliverylisters.PolicyStateLister {
+	return deliverylisters.NewPolicyStateLister(l.IndexerFor(&v1alpha1.PolicyState{}))
 }

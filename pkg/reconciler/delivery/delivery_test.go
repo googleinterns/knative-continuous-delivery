@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing/resources"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"knative.dev/pkg/ptr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
@@ -114,7 +115,7 @@ func TestTimeTillNextEvent(t *testing.T) {
 		errExpected: false,
 	}, {
 		name:  "route status has unknown target Revision (error)",
-		route: Route("default", "test", withTraffic("spec", pair{"unknown-1", 50}, pair{"unknown-2", 50})),
+		route: Route("default", "test", withTraffic(WithSpecTraffic, pair{"unknown-1", 50}, pair{"unknown-2", 50})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1"),
 			"R2": Revision("default", "R2"),
@@ -125,7 +126,7 @@ func TestTimeTillNextEvent(t *testing.T) {
 		errExpected: true,
 	}, {
 		name:  "policy A, very old + redundant Revisions",
-		route: Route("default", "test", withTraffic("spec", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
+		route: Route("default", "test", withTraffic(WithSpecTraffic, pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-500*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-450*time.Second))),
@@ -139,7 +140,7 @@ func TestTimeTillNextEvent(t *testing.T) {
 		errExpected: false,
 	}, {
 		name:  "policy A, all Revisions in progress but must ignore R1",
-		route: Route("default", "test", withTraffic("spec", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
+		route: Route("default", "test", withTraffic(WithSpecTraffic, pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-24500*time.Millisecond))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-18500*time.Millisecond))),
@@ -151,7 +152,7 @@ func TestTimeTillNextEvent(t *testing.T) {
 		errExpected: false,
 	}, {
 		name:  "policy A, at least one Revision is very old",
-		route: Route("default", "test", withTraffic("spec", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
+		route: Route("default", "test", withTraffic(WithSpecTraffic, pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-500*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-18500*time.Millisecond))),
@@ -208,7 +209,7 @@ func TestModifyRouteSpec(t *testing.T) {
 		errExpected: false,
 	}, {
 		name:  "newRevName is new, adds to an existing pool",
-		route: Route("default", "test", withTraffic("status", pair{"R1", 95}, pair{"R2", 5})),
+		route: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 95}, pair{"R2", 5})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-10000*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-21*time.Second))),
@@ -217,12 +218,12 @@ func TestModifyRouteSpec(t *testing.T) {
 		newRevName: "R3",
 		policy:     &pa,
 		clock:      timer,
-		want: Route("default", "test", withTraffic("status", pair{"R1", 95}, pair{"R2", 5}),
-			withTraffic("spec", pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1})),
+		want: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 95}, pair{"R2", 5}),
+			withTraffic(WithSpecTraffic, pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1})),
 		errExpected: false,
 	}, {
 		name:  "promotion, but pool size doesn't change",
-		route: Route("default", "test", withTraffic("status", pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1})),
+		route: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-10000*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-26*time.Second))),
@@ -231,12 +232,12 @@ func TestModifyRouteSpec(t *testing.T) {
 		newRevName: "R3",
 		policy:     &pa,
 		clock:      timer,
-		want: Route("default", "test", withTraffic("status", pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1}),
-			withTraffic("spec", pair{"R1", 93}, pair{"R2", 6}, pair{"R3", 1})),
+		want: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 94}, pair{"R2", 5}, pair{"R3", 1}),
+			withTraffic(WithSpecTraffic, pair{"R1", 93}, pair{"R2", 6}, pair{"R3", 1})),
 		errExpected: false,
 	}, {
 		name:  "promotion, and pool size shrinks",
-		route: Route("default", "test", withTraffic("status", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
+		route: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-10000*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-41*time.Second))),
@@ -245,12 +246,12 @@ func TestModifyRouteSpec(t *testing.T) {
 		newRevName: "R3",
 		policy:     &pa,
 		clock:      timer,
-		want: Route("default", "test", withTraffic("status", pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7}),
-			withTraffic("spec", pair{"R2", 93}, pair{"R3", 7})),
+		want: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 85}, pair{"R2", 8}, pair{"R3", 7}),
+			withTraffic(WithSpecTraffic, pair{"R2", 93}, pair{"R3", 7})),
 		errExpected: false,
 	}, {
 		name:  "oldest revision always ignores progression/timer",
-		route: Route("default", "test", withTraffic("status", pair{"R1", 99}, pair{"R2", 1})),
+		route: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1})),
 		revMap: map[string]*v1.Revision{
 			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second))),
 			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-61500*time.Millisecond))),
@@ -258,8 +259,8 @@ func TestModifyRouteSpec(t *testing.T) {
 		newRevName: "R2",
 		policy:     &policy,
 		clock:      timer,
-		want: Route("default", "test", withTraffic("status", pair{"R1", 99}, pair{"R2", 1}),
-			withTraffic("spec", pair{"R1", 90}, pair{"R2", 10})),
+		want: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1}),
+			withTraffic(WithSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
 		errExpected: false,
 	}}
 

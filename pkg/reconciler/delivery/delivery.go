@@ -21,10 +21,14 @@ import (
 	"math"
 	"time"
 
+	deliveryclientset "github.com/googleinterns/knative-continuous-delivery/pkg/client/clientset/versioned"
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
-	v1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
+	v1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
+	pslisters "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
+	"github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/delivery/resources"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/serving/pkg/apis/serving"
@@ -51,9 +55,10 @@ const (
 // Reconciler implements controller.Reconciler
 type Reconciler struct {
 	client            clientset.Interface
+	psclient          deliveryclientset.Interface
 	routeLister       listers.RouteLister
 	revisionLister    listers.RevisionLister
-	policystateLister v1alpha1.PolicyStateLister
+	policystateLister pslisters.PolicyStateLister
 	followup          enqueueFunc
 	clock             clock.Clock
 }
@@ -87,6 +92,8 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 		return nil
 	}
 
+	// TODO: check NextUpdateTimestamp in the PolicyState for this cfg and enqueue events
+
 	return c.updateRoute(ctx, cfg)
 }
 
@@ -104,6 +111,7 @@ func configReady(cfg *v1.Configuration) bool {
 }
 
 // updateRoute assigns traffic to active Revisions, applies new Route, and enqueues future events
+// TODO: dice up this function into smaller unit-testable pieces
 func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) error {
 	logger := logging.FromContext(ctx)
 
@@ -124,7 +132,29 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		revisionMap[rev.Name] = rev
 	}
 
+	// fetch this Configuration's corresponding PolicyState object
+	ps, err := c.policystateLister.PolicyStates(cfg.Namespace).Get(cfg.Name)
+	if apierrs.IsNotFound(err) {
+		ps = resources.MakePolicyState(cfg)
+		ps, err = c.psclient.DeliveryV1alpha1().PolicyStates(cfg.Namespace).Create(ps)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	ps = ps.DeepCopy()
+
 	route, err = modifyRouteSpec(route, revisionMap, latestReady, &policy, c.clock)
+	if err != nil {
+		return err
+	}
+	ps.Spec = v1alpha1.PolicyStateSpec{
+		Traffic: route.Spec.Traffic,
+	}
+
+	logger.Info("Applying PolicyState object")
+	_, err = c.psclient.DeliveryV1alpha1().PolicyStates(cfg.Namespace).Update(ps)
 	if err != nil {
 		return err
 	}
@@ -141,6 +171,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		return nil
 	}
 
+	// TODO: update the NextUpdateTimestamp appropriately in PolicyState
 	delay, err := timeTillNextEvent(route, revisionMap, &policy, c.clock)
 	if err != nil {
 		return err
