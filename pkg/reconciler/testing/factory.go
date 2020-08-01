@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	fakedeliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client/fake"
 	fakekubeclient "knative.dev/pkg/client/injection/kube/client/fake"
 	fakedynamicclient "knative.dev/pkg/injection/clients/dynamicclient/fake"
 	fakeservingclient "knative.dev/serving/pkg/client/injection/client/fake"
@@ -61,6 +62,7 @@ func MakeFactory(ctor Ctor) rtesting.Factory {
 
 		ctx, kubeClient := fakekubeclient.With(ctx, ls.GetKubeObjects()...)
 		ctx, client := fakeservingclient.With(ctx, ls.GetServingObjects()...)
+		ctx, deliveryclient := fakedeliveryclient.With(ctx, ls.GetDeliveryObjects()...)
 		ctx, dynamicClient := fakedynamicclient.With(ctx, ls.NewScheme(), servingtesting.ToUnstructured(t, ls.NewScheme(), r.Objects)...)
 		ctx = context.WithValue(ctx, TrackerKey, &rtesting.FakeTracker{})
 
@@ -101,6 +103,7 @@ func MakeFactory(ctor Ctor) rtesting.Factory {
 		for _, reactor := range r.WithReactors {
 			kubeClient.PrependReactor("*", "*", reactor)
 			client.PrependReactor("*", "*", reactor)
+			deliveryclient.PrependReactor("*", "*", reactor)
 			dynamicClient.PrependReactor("*", "*", reactor)
 		}
 
@@ -114,7 +117,7 @@ func MakeFactory(ctor Ctor) rtesting.Factory {
 			return rtesting.ValidateUpdates(context.Background(), action)
 		})
 
-		actionRecorderList := rtesting.ActionRecorderList{dynamicClient, client, kubeClient}
+		actionRecorderList := rtesting.ActionRecorderList{dynamicClient, client, kubeClient, deliveryclient}
 		eventList := rtesting.EventList{Recorder: eventRecorder}
 
 		return c, actionRecorderList, eventList

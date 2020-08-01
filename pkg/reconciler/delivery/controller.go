@@ -22,6 +22,7 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 
+	deliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client"
 	policystateinformer "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
@@ -49,6 +50,7 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 
 	c := &Reconciler{
 		client:            servingclient.Get(ctx),
+		psclient:          deliveryclient.Get(ctx),
 		routeLister:       routeInformer.Lister(),
 		revisionLister:    revisionInformer.Lister(),
 		policystateLister: policystateInformer.Lister(),

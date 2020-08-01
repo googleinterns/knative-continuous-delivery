@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	deliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
 	clientgotesting "k8s.io/client-go/testing"
@@ -34,6 +34,7 @@ import (
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
 	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing"
+	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing/resources"
 	. "knative.dev/pkg/reconciler/testing"
 	. "knative.dev/serving/pkg/testing/v1"
 
@@ -70,16 +71,19 @@ func TestReconcile(t *testing.T) {
 		Name: "degenerate to simple logic with only 2 Revisions",
 		Key:  "default/test3",
 		Objects: []runtime.Object{
-			Route("default", "test3", withTraffic("status", pair{"R1", 99}, pair{"R2", 1})),
+			Route("default", "test3", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1})),
 			Configuration("default", "test3", WithLatestCreated("R2"), WithLatestReady("R2")),
 			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
 			Revision("default", "R2", WithCreationTimestamp(now.Add(-61100*time.Millisecond)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
+			PolicyState("default", "test3"),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
-			Object: Route("default", "test3", withTraffic("status", pair{"R1", 99}, pair{"R2", 1}),
-				withTraffic("spec", pair{"R1", 90}, pair{"R2", 10})),
+			Object: Route("default", "test3", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1}),
+				withTraffic(WithSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
+		}, {
+			Object: PolicyState("default", "test3", withPSTraffic(WithPSSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
 		}},
 		PostConditions: []func(*testing.T, *TableRow){
 			assertEventQueued("default/test3", 59*time.Second),
@@ -88,7 +92,7 @@ func TestReconcile(t *testing.T) {
 		Name: "many Revisions squeeze out the oldest one",
 		Key:  "default/test4",
 		Objects: []runtime.Object{
-			Route("default", "test4", withTraffic("status", pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1})),
+			Route("default", "test4", withTraffic(WithStatusTraffic, pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1})),
 			Configuration("default", "test4", WithLatestCreated("R7"), WithLatestReady("R7")),
 			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
@@ -104,10 +108,14 @@ func TestReconcile(t *testing.T) {
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
 			Revision("default", "R7", WithCreationTimestamp(now.Add(-61500*time.Millisecond)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
+			PolicyState("default", "test4"),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
-			Object: Route("default", "test4", withTraffic("status", pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1}),
-				withTraffic("spec", pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10})),
+			Object: Route("default", "test4", withTraffic(WithStatusTraffic, pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1}),
+				withTraffic(WithSpecTraffic, pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10})),
+		}, {
+			Object: PolicyState("default", "test4",
+				withPSTraffic(WithPSSpecTraffic, pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10})),
 		}},
 		PostConditions: []func(*testing.T, *TableRow){
 			assertEventQueued("default/test4", 58*time.Second),
@@ -116,10 +124,12 @@ func TestReconcile(t *testing.T) {
 	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, tr *TableRow) controller.Reconciler {
 		tr.OtherTestData = make(map[string]interface{})
 		r := &Reconciler{
-			client:         servingclient.Get(ctx),
-			routeLister:    listers.GetRouteLister(),
-			revisionLister: listers.GetRevisionLister(),
-			clock:          clock.NewFakeClock(now),
+			client:            servingclient.Get(ctx),
+			psclient:          deliveryclient.Get(ctx),
+			routeLister:       listers.GetRouteLister(),
+			revisionLister:    listers.GetRevisionLister(),
+			policystateLister: listers.GetPolicyStateLister(),
+			clock:             clock.NewFakeClock(now),
 			// note that we manually, systematically assigned unique namespace/name strings to each test Configuration
 			// we use those strings for each test
 			followup: func(cfg *v1.Configuration, t time.Duration) {
@@ -132,44 +142,28 @@ func TestReconcile(t *testing.T) {
 	}))
 }
 
-// Configuration creates a configuration with ConfigOptions
-func Configuration(namespace, name string, co ...ConfigOption) *v1.Configuration {
-	c := &v1.Configuration{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-	}
-	for _, opt := range co {
-		opt(c)
-	}
-	c.SetDefaults(context.Background())
-	return c
-}
-
-// Revision creates a revision with RevisionOptions
-func Revision(namespace, name string, ro ...RevisionOption) *v1.Revision {
-	r := &v1.Revision{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-	}
-	for _, opt := range ro {
-		opt(r)
-	}
-	r.SetDefaults(context.Background())
-	return r
-}
-
 // this type is simply a convenient alias, see withTraffic funtion below for its purpose
 type pair struct {
 	name  string
 	value int64
 }
 
+type roTrafficFunc func(...v1.TrafficTarget) RouteOption
+type psoTrafficFunc func(...v1.TrafficTarget) PolicyStateOption
+
 // withTraffic extracts some verbiage from the table tests to make them more concise
-func withTraffic(field string, nameValuePairs ...pair) RouteOption {
+func withTraffic(rf roTrafficFunc, nameValuePairs ...pair) RouteOption {
+	tt := makeTrafficTargetList(nameValuePairs...)
+	return rf(tt...)
+}
+
+// withPSTraffic is similar to withTraffic, but it serves PolicyStates
+func withPSTraffic(pf psoTrafficFunc, nameValuePairs ...pair) PolicyStateOption {
+	tt := makeTrafficTargetList(nameValuePairs...)
+	return pf(tt...)
+}
+
+func makeTrafficTargetList(nameValuePairs ...pair) []v1.TrafficTarget {
 	tt := make([]v1.TrafficTarget, len(nameValuePairs))
 	for i, pair := range nameValuePairs {
 		tt[i] = v1.TrafficTarget{
@@ -181,15 +175,7 @@ func withTraffic(field string, nameValuePairs ...pair) RouteOption {
 	if len(nameValuePairs) == 1 {
 		tt[0].LatestRevision = ptr.Bool(true)
 	}
-
-	switch field {
-	case "spec":
-		return WithSpecTraffic(tt...)
-	case "status":
-		return WithStatusTraffic(tt...)
-	default:
-		panic(fmt.Errorf("withTraffic field can only be 'spec' or 'status'"))
-	}
+	return tt
 }
 
 // assertEventQueued returns a function that is used for PostConditions checking

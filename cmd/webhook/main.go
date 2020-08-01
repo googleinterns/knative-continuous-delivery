@@ -32,6 +32,7 @@ import (
 	defaultconfig "knative.dev/serving/pkg/apis/config"
 	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
 
+	deliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client"
 	policystate "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/informers/delivery/v1alpha1/policystate"
 )
 
@@ -58,7 +59,10 @@ func newDefaultingAdmissionController(ctx context.Context, cmw configmap.Watcher
 		// A function that infuses the context passed to Validate/SetDefaults with custom metadata.
 		func(c context.Context) context.Context {
 			inf := policystate.Get(ctx)
-			return context.WithValue(c, policystate.Key{}, inf)
+			clt := deliveryclient.Get(ctx)
+			c = context.WithValue(c, policystate.Key{}, inf)
+			c = context.WithValue(c, deliveryclient.Key{}, clt)
+			return c
 		},
 
 		// Whether to disallow unknown fields.
