@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"time"
+
 	psv1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
@@ -50,5 +52,12 @@ func WithPSSpecTraffic(traffic ...v1.TrafficTarget) PolicyStateOption {
 func WithPSStatusTraffic(traffic ...v1.TrafficTarget) PolicyStateOption {
 	return func(ps *psv1alpha1.PolicyState) {
 		ps.Status.Traffic = traffic
+	}
+}
+
+// WithNextUpdateTimestamp sets the Status.NextUpdateTimestamp of a PolicyState
+func WithNextUpdateTimestamp(t time.Time) PolicyStateOption {
+	return func(ps *psv1alpha1.PolicyState) {
+		ps.Status.NextUpdateTimestamp = &metav1.Time{t}
 	}
 }
