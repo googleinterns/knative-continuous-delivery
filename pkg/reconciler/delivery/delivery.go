@@ -29,6 +29,7 @@ import (
 	pslisters "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
 	"github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/delivery/resources"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/serving/pkg/apis/serving"
@@ -92,7 +93,12 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 		return nil
 	}
 
-	// TODO: check NextUpdateTimestamp in the PolicyState for this cfg and enqueue events
+	// check for existing NextUpdateTimestamp to prevent event leaks in case of KCD controller restart, etc.
+	if ps, err := c.fetchPolicyState(cfg); err != nil {
+		return err
+	} else if ps.Status.NextUpdateTimestamp != nil && ps.Status.NextUpdateTimestamp.Time.After(c.clock.Now()) {
+		c.followup(cfg, ps.Status.NextUpdateTimestamp.Time.Sub(c.clock.Now()))
+	}
 
 	return c.updateRoute(ctx, cfg)
 }
@@ -110,42 +116,99 @@ func configReady(cfg *v1.Configuration) bool {
 	return latestReady == latestCreated && latestReady != ""
 }
 
-// updateRoute assigns traffic to active Revisions, applies new Route, and enqueues future events
-// TODO: dice up this function into smaller unit-testable pieces
-func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) error {
-	logger := logging.FromContext(ctx)
-
+// fetchRoute queries the indexer to retrieve a Route object
+func (c *Reconciler) fetchRoute(ctx context.Context, cfg *v1.Configuration) (*v1.Route, error) {
 	r, err := c.routeLister.Routes(cfg.Namespace).Get(cfg.Name)
 	if err != nil {
-		logger.Info("Failed to find Route object, potentially due to namespace/name mismatch between Configuration and Route")
-		return err
+		logging.FromContext(ctx).Info("Failed to find Route object, potentially due to namespace/name mismatch between Configuration and Route")
+		return nil, err
 	}
-	route := r.DeepCopy()
-	latestReady := cfg.Status.LatestReadyRevisionName
+	return r.DeepCopy(), nil
+}
+
+// fetchRevisions queries the indexer to find the Revisions and return a map from Revision names to objects
+func (c *Reconciler) fetchRevisions(cfg *v1.Configuration) (map[string]*v1.Revision, error) {
 	selector := labels.SelectorFromSet(labels.Set{serving.ConfigurationLabelKey: cfg.Name})
 	revisionList, err := c.revisionLister.Revisions(cfg.Namespace).List(selector)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	revisionMap := make(map[string]*v1.Revision) // mapping Revision names to objects
 	for _, rev := range revisionList {
 		revisionMap[rev.Name] = rev
 	}
+	return revisionMap, nil
+}
 
-	// fetch this Configuration's corresponding PolicyState object
+// fetchPolicyState queries the indexer to retrieve a PolicyState object whose namespace/name match with cfg
+// it creates one if a PolicyState object doesn't already exist for the given namespace/name
+func (c *Reconciler) fetchPolicyState(cfg *v1.Configuration) (*v1alpha1.PolicyState, error) {
 	ps, err := c.policystateLister.PolicyStates(cfg.Namespace).Get(cfg.Name)
 	if apierrs.IsNotFound(err) {
 		ps = resources.MakePolicyState(cfg)
 		ps, err = c.psclient.DeliveryV1alpha1().PolicyStates(cfg.Namespace).Create(ps)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else if err != nil {
+		return nil, err
+	}
+	return ps.DeepCopy(), nil
+}
+
+// applyChanges applies the newly create Route and PolicyState objects and wraps up the reconciliation
+func (c *Reconciler) applyChanges(ctx context.Context, cfg *v1.Configuration, route *v1.Route, ps *v1alpha1.PolicyState, revisionMap map[string]*v1.Revision) error {
+	logger := logging.FromContext(ctx)
+
+	// first compute whether or not we need to enqueue events for future rollout stages
+	if *route.Spec.Traffic[0].LatestRevision {
+		logger.Info("Routing state has stabilized!")
+		ps.Status.NextUpdateTimestamp = nil
+	} else {
+		delay, err := timeTillNextEvent(route, revisionMap, &policy, c.clock)
+		if err != nil {
+			return err
+		}
+		if delay != 0 {
+			logger.Infof("Enqueueing event after %v", delay)
+			c.followup(cfg, delay)
+		}
+		ps.Status.NextUpdateTimestamp = &metav1.Time{
+			c.clock.Now().Add(delay),
+		}
+	}
+
+	logger.Info("Applying PolicyState object")
+	_, err := c.psclient.DeliveryV1alpha1().PolicyStates(cfg.Namespace).Update(ps)
+	if err != nil {
 		return err
 	}
-	ps = ps.DeepCopy()
+	logger.Info("Applying Route object")
+	_, err = c.client.ServingV1().Routes(cfg.Namespace).Update(route)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-	route, err = modifyRouteSpec(route, revisionMap, latestReady, &policy, c.clock)
+// updateRoute assigns traffic to active Revisions, applies new Route, and enqueues future events
+func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) error {
+	route, err := c.fetchRoute(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	revisionMap, err := c.fetchRevisions(cfg)
+	if err != nil {
+		return err
+	}
+
+	ps, err := c.fetchPolicyState(cfg)
+	if err != nil {
+		return err
+	}
+
+	route, err = modifyRouteSpec(route, revisionMap, cfg.Status.LatestReadyRevisionName, &policy, c.clock)
 	if err != nil {
 		return err
 	}
@@ -153,36 +216,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		Traffic: route.Spec.Traffic,
 	}
 
-	logger.Info("Applying PolicyState object")
-	_, err = c.psclient.DeliveryV1alpha1().PolicyStates(cfg.Namespace).Update(ps)
-	if err != nil {
-		return err
-	}
-
-	logger.Info("Applying Route object")
-	_, err = c.client.ServingV1().Routes(cfg.Namespace).Update(route)
-	if err != nil {
-		return err
-	}
-
-	// when we have latestRevision = true, we know that we don't need to queue future events
-	if *route.Spec.Traffic[0].LatestRevision {
-		logger.Info("Routing state has stabilized!")
-		return nil
-	}
-
-	// TODO: update the NextUpdateTimestamp appropriately in PolicyState
-	delay, err := timeTillNextEvent(route, revisionMap, &policy, c.clock)
-	if err != nil {
-		return err
-	}
-	if delay == 0 {
-		return nil
-	}
-	logger.Infof("Enqueueing event after %v", delay)
-	c.followup(cfg, delay)
-
-	return nil
+	return c.applyChanges(ctx, cfg, route, ps, revisionMap)
 }
 
 // min is a helper that returns the minimum of an arbitrary number of integers

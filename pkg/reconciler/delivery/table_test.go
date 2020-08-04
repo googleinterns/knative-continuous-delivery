@@ -83,7 +83,8 @@ func TestReconcile(t *testing.T) {
 			Object: Route("default", "test3", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1}),
 				withTraffic(WithSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
 		}, {
-			Object: PolicyState("default", "test3", withPSTraffic(WithPSSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
+			Object: PolicyState("default", "test3", withPSTraffic(WithPSSpecTraffic, pair{"R1", 90}, pair{"R2", 10}),
+				WithNextUpdateTimestamp(now.Add(59*time.Second))),
 		}},
 		PostConditions: []func(*testing.T, *TableRow){
 			assertEventQueued("default/test3", 59*time.Second),
@@ -115,7 +116,8 @@ func TestReconcile(t *testing.T) {
 				withTraffic(WithSpecTraffic, pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10})),
 		}, {
 			Object: PolicyState("default", "test4",
-				withPSTraffic(WithPSSpecTraffic, pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10})),
+				withPSTraffic(WithPSSpecTraffic, pair{"R2", 20}, pair{"R3", 20}, pair{"R4", 20}, pair{"R5", 20}, pair{"R6", 10}, pair{"R7", 10}),
+				WithNextUpdateTimestamp(now.Add(58*time.Second))),
 		}},
 		PostConditions: []func(*testing.T, *TableRow){
 			assertEventQueued("default/test4", 58*time.Second),
