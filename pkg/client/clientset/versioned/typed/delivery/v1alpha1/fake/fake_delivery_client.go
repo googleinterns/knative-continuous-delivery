@@ -26,6 +26,10 @@ type FakeDeliveryV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeDeliveryV1alpha1) Policies(namespace string) v1alpha1.PolicyInterface {
+	return &FakePolicies{c, namespace}
+}
+
 func (c *FakeDeliveryV1alpha1) PolicyStates(namespace string) v1alpha1.PolicyStateInterface {
 	return &FakePolicyStates{c, namespace}
 }

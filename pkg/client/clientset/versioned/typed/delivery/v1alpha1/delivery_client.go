@@ -24,12 +24,17 @@ import (
 
 type DeliveryV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	PoliciesGetter
 	PolicyStatesGetter
 }
 
 // DeliveryV1alpha1Client is used to interact with features provided by the delivery.knative.dev group.
 type DeliveryV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *DeliveryV1alpha1Client) Policies(namespace string) PolicyInterface {
+	return newPolicies(c, namespace)
 }
 
 func (c *DeliveryV1alpha1Client) PolicyStates(namespace string) PolicyStateInterface {

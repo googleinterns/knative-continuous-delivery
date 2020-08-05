@@ -16,6 +16,14 @@
 
 package v1alpha1
 
+// PolicyListerExpansion allows custom methods to be added to
+// PolicyLister.
+type PolicyListerExpansion interface{}
+
+// PolicyNamespaceListerExpansion allows custom methods to be added to
+// PolicyNamespaceLister.
+type PolicyNamespaceListerExpansion interface{}
+
 // PolicyStateListerExpansion allows custom methods to be added to
 // PolicyStateLister.
 type PolicyStateListerExpansion interface{}
