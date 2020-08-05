@@ -51,6 +51,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=delivery.knative.dev, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("policies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Delivery().V1alpha1().Policies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("policystates"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Delivery().V1alpha1().PolicyStates().Informer()}, nil
 

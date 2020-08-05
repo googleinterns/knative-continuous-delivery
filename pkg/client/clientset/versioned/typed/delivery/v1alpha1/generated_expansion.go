@@ -16,4 +16,6 @@
 
 package v1alpha1
 
+type PolicyExpansion interface{}
+
 type PolicyStateExpansion interface{}
