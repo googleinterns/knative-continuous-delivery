@@ -46,14 +46,42 @@ var (
 )
 
 // PolicySpec holds info about the desired traffic behavior
+// These fields are exactly the same as those defined in pkg/reconciler/delivery/policy.go
 type PolicySpec struct {
-	// TODO: implement this
+	// Mode specifies the metric that the policy is based on
+	// Possible values are: "time", "request", "error"
+	Mode string `json:"mode"`
+
+	// DefaultThreshold is the threshold value that is used when a rollout stage doesn't specify
+	// a threshold of its own; this can be useful when the threshold is a constant value across
+	// all rollout stages, in which case there is no need to copy paste the same value in all entries
+	// The interpretation of DefaultThreshold depends on the value of Mode
+	DefaultThreshold int `json:"defaultThreshold"`
+
+	// Stages specifies the traffic percentages that the NEW Revision is expected to have
+	// at successive rollout stages; the list of integers must start at 0
+	// all entries must be in the range [0, 100), and must be sorted in increasing order
+	// Technically the final rollout percentage is 100, but this is implicitly understood,
+	// and should NOT be explicitly specified in Stages
+	// In addition to the traffic percentages, each stage can OPTIONALLY specify its own threshold
+	// this gives greater flexibility to policy design
+	// The threshold value for stage N is the value that must be achieved BEFORE moving to stage N+1
+	Stages []Stage `json:"stages,omitempty"`
+}
+
+// Stage specifies a single rollout stage
+type Stage struct {
+	// Percent is the percentage of traffic that should go to the new Revision at this stage
+	Percent int `json:"percent"`
+
+	// Threshold tells the condition for progressing to the next rollout stage
+	// This field is optional; if not specified, then the threshold value defaults to DefaultThreshold
+	Threshold *int `json:"threshold,omitempty"`
 }
 
 // PolicyStatusFields is the fields in PolicyStatus
-type PolicyStatusFields struct {
-	// TODO: implement this
-}
+// This is empty for now because nothing is needed here
+type PolicyStatusFields struct{}
 
 // PolicyStatus holds info about the current traffic behavior
 type PolicyStatus struct {
