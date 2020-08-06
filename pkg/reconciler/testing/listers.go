@@ -105,3 +105,8 @@ func (l *Listers) GetRevisionLister() servinglisters.RevisionLister {
 func (l *Listers) GetPolicyStateLister() deliverylisters.PolicyStateLister {
 	return deliverylisters.NewPolicyStateLister(l.IndexerFor(&v1alpha1.PolicyState{}))
 }
+
+// GetPolicyLister returns the PolicyLister
+func (l *Listers) GetPolicyLister() deliverylisters.PolicyLister {
+	return deliverylisters.NewPolicyLister(l.IndexerFor(&v1alpha1.Policy{}))
+}
