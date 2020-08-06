@@ -16,6 +16,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/pkg/apis"
 
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 )
@@ -43,6 +44,10 @@ type Policy struct {
 var (
 	// Check that the type conforms to the duck Knative Resource shape.
 	_ duckv1.KRShaped = (*Policy)(nil)
+
+	// Check that Policy may be validated and defaulted.
+	_ apis.Validatable = (*Policy)(nil)
+	_ apis.Defaultable = (*Policy)(nil)
 )
 
 // PolicySpec holds info about the desired traffic behavior
@@ -75,7 +80,7 @@ type Stage struct {
 	Percent int `json:"percent"`
 
 	// Threshold tells the condition for progressing to the next rollout stage
-	// This field is optional; if not specified, then the threshold value defaults to DefaultThreshold
+	// This field is optional; if not specified, then the threshold value defaults to PolicySpec.DefaultThreshold
 	Threshold *int `json:"threshold,omitempty"`
 }
 

@@ -28,7 +28,9 @@ import (
 	"knative.dev/pkg/webhook/certificates"
 	"knative.dev/pkg/webhook/resourcesemantics"
 	"knative.dev/pkg/webhook/resourcesemantics/defaulting"
+	"knative.dev/pkg/webhook/resourcesemantics/validation"
 
+	deliveryv1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
 	defaultconfig "knative.dev/serving/pkg/apis/config"
 	servingv1 "knative.dev/serving/pkg/apis/serving/v1"
 
@@ -37,7 +39,8 @@ import (
 )
 
 var types = map[schema.GroupVersionKind]resourcesemantics.GenericCRD{
-	servingv1.SchemeGroupVersion.WithKind("Route"): &defaults.ContinuousDeploymentRoute{},
+	servingv1.SchemeGroupVersion.WithKind("Route"):         &defaults.ContinuousDeploymentRoute{},
+	deliveryv1alpha1.SchemeGroupVersion.WithKind("Policy"): &deliveryv1alpha1.Policy{},
 }
 
 func newDefaultingAdmissionController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
@@ -70,6 +73,32 @@ func newDefaultingAdmissionController(ctx context.Context, cmw configmap.Watcher
 	)
 }
 
+func newValidationAdmissionController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	// Decorate contexts with the current state of the config.
+	store := defaultconfig.NewStore(logging.FromContext(ctx).Named("config-store"))
+	store.WatchConfigs(cmw)
+
+	return validation.NewAdmissionController(ctx,
+
+		// Name of the resource webhook.
+		"validation.webhook.continuous-delivery.knative.dev",
+
+		// The path on which to serve the webhook.
+		"/resource-validation",
+
+		// The resources to validate.
+		types,
+
+		// A function that infuses the context passed to Validate/SetDefaults with custom metadata.
+		func(ctx context.Context) context.Context {
+			return ctx
+		},
+
+		// Whether to disallow unknown fields.
+		true,
+	)
+}
+
 func main() {
 	// Set up a signal context with our webhook options
 	ctx := webhook.WithOptions(signals.NewContext(), webhook.Options{
@@ -81,5 +110,6 @@ func main() {
 	sharedmain.WebhookMainWithContext(ctx,
 		"continuous-delivery-webhook",
 		certificates.NewController,
-		newDefaultingAdmissionController)
+		newDefaultingAdmissionController,
+		newValidationAdmissionController)
 }
