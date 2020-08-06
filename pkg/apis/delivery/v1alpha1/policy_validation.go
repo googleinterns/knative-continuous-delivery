@@ -26,5 +26,43 @@ import (
 // Validate implements apis.Validatable
 func (p *Policy) Validate(ctx context.Context) *apis.FieldError {
 	logging.FromContext(ctx).Infof("Validate called for %v", *p)
-	return nil
+	var err *apis.FieldError
+	// validate that the mode value must be "time" ("request" and "error" not supported for now)
+	if p.Spec.Mode != "time" {
+		err = err.Also(apis.ErrInvalidValue(p.Spec.Mode, "spec.mode"))
+	}
+	// validate that the defaultThreshold must be present and positive
+	if p.Spec.DefaultThreshold <= 0 {
+		err = err.Also(apis.ErrGeneric("DefaultThreshold value is mandatory and must be a positive integer", "spec.defaultThreshold"))
+	}
+	// validate that there is at least 1 stage
+	if len(p.Spec.Stages) < 1 {
+		err = err.Also(apis.ErrGeneric("There must be at least one rollout stage in a Policy", "spec.stages"))
+		return err // no need for further checking
+	}
+	// validate that the first stage must start with 0
+	if p.Spec.Stages[0].Percent != 0 {
+		err = err.Also(apis.ErrGeneric("The first stage must have a percentage value of 0", "spec.stages"))
+	}
+	// validate all stages and check:
+	// (1) all percents are in increasing order
+	// (2) all percents are within range [0, 100)
+	// (3) the optional threshold, if specified, must be a positive integer
+	prev := 0
+	for _, s := range p.Spec.Stages {
+		if s.Percent < prev {
+			err = err.Also(apis.ErrGeneric("Rollout percentages must be in increasing order", "spec.stages"))
+			break
+		}
+		if s.Percent < 0 || s.Percent >= 100 {
+			err = err.Also(apis.ErrOutOfBoundsValue(s.Percent, 0, 99, "spec.stages"))
+			break
+		}
+		if s.Threshold != nil && *s.Threshold <= 0 {
+			err = err.Also(apis.ErrGeneric("Optional threshold value must be a positive integer", "spec.stages"))
+			break
+		}
+		prev = s.Percent
+	}
+	return err
 }
