@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery"
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
 	deliveryclient "github.com/googleinterns/knative-continuous-delivery/pkg/client/injection/client"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -72,12 +74,14 @@ func TestReconcile(t *testing.T) {
 		Key:  "default/test3",
 		Objects: []runtime.Object{
 			Route("default", "test3", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1})),
-			Configuration("default", "test3", WithLatestCreated("R2"), WithLatestReady("R2")),
+			Configuration("default", "test3", WithLatestCreated("R2"), WithLatestReady("R2"), withPolicy("test3")),
 			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
 			Revision("default", "R2", WithCreationTimestamp(now.Add(-61100*time.Millisecond)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test3")),
 			PolicyState("default", "test3"),
+			MakePolicy("default", "test3", WithMode("time"), WithDefaultThreshold(60),
+				WithStages(v1alpha1.Stage{0, nil}, v1alpha1.Stage{1, nil}, v1alpha1.Stage{10, nil}, v1alpha1.Stage{20, nil}, v1alpha1.Stage{90, nil})),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
 			Object: Route("default", "test3", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1}),
@@ -94,7 +98,7 @@ func TestReconcile(t *testing.T) {
 		Key:  "default/test4",
 		Objects: []runtime.Object{
 			Route("default", "test4", withTraffic(WithStatusTraffic, pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1})),
-			Configuration("default", "test4", WithLatestCreated("R7"), WithLatestReady("R7")),
+			Configuration("default", "test4", WithLatestCreated("R7"), WithLatestReady("R7"), withPolicy("test4")),
 			Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
 			Revision("default", "R2", WithCreationTimestamp(now.Add(-121500*time.Millisecond)),
@@ -110,6 +114,8 @@ func TestReconcile(t *testing.T) {
 			Revision("default", "R7", WithCreationTimestamp(now.Add(-61500*time.Millisecond)),
 				WithRevisionLabel(serving.ConfigurationLabelKey, "test4")),
 			PolicyState("default", "test4"),
+			MakePolicy("default", "test4", WithMode("time"), WithDefaultThreshold(60),
+				WithStages(v1alpha1.Stage{0, nil}, v1alpha1.Stage{1, nil}, v1alpha1.Stage{10, nil}, v1alpha1.Stage{20, nil}, v1alpha1.Stage{90, nil})),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
 			Object: Route("default", "test4", withTraffic(WithStatusTraffic, pair{"R1", 58}, pair{"R2", 10}, pair{"R3", 10}, pair{"R4", 10}, pair{"R5", 10}, pair{"R6", 1}, pair{"R7", 1}),
@@ -130,6 +136,7 @@ func TestReconcile(t *testing.T) {
 			psclient:          deliveryclient.Get(ctx),
 			routeLister:       listers.GetRouteLister(),
 			revisionLister:    listers.GetRevisionLister(),
+			policyLister:      listers.GetPolicyLister(),
 			policystateLister: listers.GetPolicyStateLister(),
 			clock:             clock.NewFakeClock(now),
 			// note that we manually, systematically assigned unique namespace/name strings to each test Configuration
@@ -163,6 +170,17 @@ func withTraffic(rf roTrafficFunc, nameValuePairs ...pair) RouteOption {
 func withPSTraffic(pf psoTrafficFunc, nameValuePairs ...pair) PolicyStateOption {
 	tt := makeTrafficTargetList(nameValuePairs...)
 	return pf(tt...)
+}
+
+// withPolicy annotates the Configuration with policyName
+// the library doesn't have a WithAnnotation helper for v1.Configuration (!!!)
+func withPolicy(policyName string) ConfigOption {
+	return func(cfg *v1.Configuration) {
+		if cfg.Annotations == nil {
+			cfg.Annotations = make(map[string]string)
+		}
+		cfg.Annotations[delivery.PolicyNameKey] = policyName
+	}
 }
 
 func makeTrafficTargetList(nameValuePairs ...pair) []v1.TrafficTarget {

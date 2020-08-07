@@ -25,6 +25,7 @@ import (
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	configurationreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/configuration"
 
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery"
 	v1alpha1 "github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
 	pslisters "github.com/googleinterns/knative-continuous-delivery/pkg/client/listers/delivery/v1alpha1"
 	"github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/delivery/resources"
@@ -59,6 +60,7 @@ type Reconciler struct {
 	psclient          deliveryclientset.Interface
 	routeLister       listers.RouteLister
 	revisionLister    listers.RevisionLister
+	policyLister      pslisters.PolicyLister
 	policystateLister pslisters.PolicyStateLister
 	followup          enqueueFunc
 	clock             clock.Clock
@@ -70,16 +72,6 @@ type enqueueFunc func(*v1.Configuration, time.Duration)
 // Check that our Reconciler implements ksvcreconciler.Interface
 var _ configurationreconciler.Interface = (*Reconciler)(nil)
 
-var (
-	// we use a global variable for now because we assume for simplicity that all Configurations
-	// use the same policy; in the future, we might want to associate a policy to each Configuration
-	policy Policy = Policy{
-		Mode:             "time",
-		Stages:           []Stage{{0, nil}, {1, nil}, {10, nil}, {20, nil}, {90, nil}},
-		DefaultThreshold: 60,
-	}
-)
-
 // ReconcileKind is triggered to enforce the rollout policy
 func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) pkgreconciler.Event {
 	// ignore changes triggered by continuous-delivery itself
@@ -90,6 +82,12 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, cfg *v1.Configuration) p
 	// wait for latest created Revision to be ready
 	if !configReady(cfg) {
 		c.followup(cfg, WaitForReady)
+		return nil
+	}
+
+	// ignore if no policy is specified
+	if _, ok := cfg.Annotations[delivery.PolicyNameKey]; !ok {
+		logging.FromContext(ctx).Infof("No policy specified for %v, skipping", cfg.Namespace+"/"+cfg.Name)
 		return nil
 	}
 
@@ -140,6 +138,18 @@ func (c *Reconciler) fetchRevisions(cfg *v1.Configuration) (map[string]*v1.Revis
 	return revisionMap, nil
 }
 
+// fetchPolicy queries the indexer to retrieve a Policy object and return its translated version
+// if annotations don't specify a Policy or if the specified Policy cannot be found, an error is returned
+func (c *Reconciler) fetchPolicy(cfg *v1.Configuration) (*Policy, error) {
+	// there's no need for defensive map query check, because it would have been taken care of in ReconcileKind
+	policyName := cfg.Annotations[delivery.PolicyNameKey]
+	p, err := c.policyLister.Policies(cfg.Namespace).Get(policyName)
+	if err != nil {
+		return nil, err
+	}
+	return translatePolicy(p.DeepCopy()), nil
+}
+
 // fetchPolicyState queries the indexer to retrieve a PolicyState object whose namespace/name match with cfg
 // it creates one if a PolicyState object doesn't already exist for the given namespace/name
 func (c *Reconciler) fetchPolicyState(cfg *v1.Configuration) (*v1alpha1.PolicyState, error) {
@@ -157,7 +167,7 @@ func (c *Reconciler) fetchPolicyState(cfg *v1.Configuration) (*v1alpha1.PolicySt
 }
 
 // applyChanges applies the newly create Route and PolicyState objects and wraps up the reconciliation
-func (c *Reconciler) applyChanges(ctx context.Context, cfg *v1.Configuration, route *v1.Route, ps *v1alpha1.PolicyState, revisionMap map[string]*v1.Revision) error {
+func (c *Reconciler) applyChanges(ctx context.Context, cfg *v1.Configuration, route *v1.Route, ps *v1alpha1.PolicyState, revisionMap map[string]*v1.Revision, p *Policy) error {
 	logger := logging.FromContext(ctx)
 
 	// first compute whether or not we need to enqueue events for future rollout stages
@@ -165,7 +175,7 @@ func (c *Reconciler) applyChanges(ctx context.Context, cfg *v1.Configuration, ro
 		logger.Info("Routing state has stabilized!")
 		ps.Status.NextUpdateTimestamp = nil
 	} else {
-		delay, err := timeTillNextEvent(route, revisionMap, &policy, c.clock)
+		delay, err := timeTillNextEvent(route, revisionMap, p, c.clock)
 		if err != nil {
 			return err
 		}
@@ -198,6 +208,11 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		return err
 	}
 
+	policy, err := c.fetchPolicy(cfg)
+	if err != nil {
+		return err
+	}
+
 	revisionMap, err := c.fetchRevisions(cfg)
 	if err != nil {
 		return err
@@ -208,7 +223,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		return err
 	}
 
-	route, err = modifyRouteSpec(route, revisionMap, cfg.Status.LatestReadyRevisionName, &policy, c.clock)
+	route, err = modifyRouteSpec(route, revisionMap, cfg.Status.LatestReadyRevisionName, policy, c.clock)
 	if err != nil {
 		return err
 	}
@@ -216,7 +231,7 @@ func (c *Reconciler) updateRoute(ctx context.Context, cfg *v1.Configuration) err
 		Traffic: route.Spec.Traffic,
 	}
 
-	return c.applyChanges(ctx, cfg, route, ps, revisionMap)
+	return c.applyChanges(ctx, cfg, route, ps, revisionMap, policy)
 }
 
 // min is a helper that returns the minimum of an arbitrary number of integers
