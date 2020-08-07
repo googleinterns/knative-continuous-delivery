@@ -16,6 +16,7 @@ package delivery
 
 import (
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -180,6 +181,26 @@ func TestTimeTillNextEvent(t *testing.T) {
 func TestModifyRouteSpec(t *testing.T) {
 	var now = time.Now()
 	var timer = clock.NewFakeClock(now)
+
+	// create the test setup for a very large test
+	// 200 revisions R1-R200 are created at the same time, and we added R201 just now
+	var largeTestRevMap = make(map[string]*v1.Revision)
+	for i := 1; i <= 200; i++ {
+		revName := "R" + strconv.Itoa(i)
+		largeTestRevMap[revName] = Revision("default", revName, WithCreationTimestamp(now.Add(time.Duration(i-3000)*time.Millisecond)))
+	}
+	largeTestRevMap["R201"] = Revision("default", "R201", WithCreationTimestamp(now.Add(-1*time.Second)))
+	var largeTestRouteTraffic = make([]pair, 100)
+	var largeTestRouteTrafficNew = make([]pair, 100)
+	for i := 101; i <= 200; i++ {
+		revName := "R" + strconv.Itoa(i)
+		largeTestRouteTraffic[i-101] = pair{revName, 1}
+	}
+	for i := 0; i < 99; i++ {
+		largeTestRouteTrafficNew[i] = largeTestRouteTraffic[i+1]
+	}
+	largeTestRouteTrafficNew[99] = pair{"R201", 1}
+
 	var tests = []struct {
 		name        string
 		route       *v1.Route
@@ -253,14 +274,24 @@ func TestModifyRouteSpec(t *testing.T) {
 		name:  "oldest revision always ignores progression/timer",
 		route: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1})),
 		revMap: map[string]*v1.Revision{
-			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-125*time.Second))),
-			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-61500*time.Millisecond))),
+			"R1": Revision("default", "R1", WithCreationTimestamp(now.Add(-11*time.Second))),
+			"R2": Revision("default", "R2", WithCreationTimestamp(now.Add(-5150*time.Millisecond))),
 		},
 		newRevName: "R2",
-		policy:     &policy,
+		policy:     &pa,
 		clock:      timer,
 		want: Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 99}, pair{"R2", 1}),
-			withTraffic(WithSpecTraffic, pair{"R1", 90}, pair{"R2", 10})),
+			withTraffic(WithSpecTraffic, pair{"R1", 98}, pair{"R2", 2})),
+		errExpected: false,
+	}, {
+		name:       "> 100 revisions split traffic at 1% granularity",
+		route:      Route("default", "test", withTraffic(WithStatusTraffic, largeTestRouteTraffic...)),
+		revMap:     largeTestRevMap,
+		newRevName: "R201",
+		policy:     &pa,
+		clock:      timer,
+		want: Route("default", "test", withTraffic(WithStatusTraffic, largeTestRouteTraffic...),
+			withTraffic(WithSpecTraffic, largeTestRouteTrafficNew...)),
 		errExpected: false,
 	}}
 
