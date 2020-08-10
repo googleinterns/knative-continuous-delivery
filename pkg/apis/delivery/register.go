@@ -17,4 +17,7 @@ package delivery
 const (
 	// GroupName is the group name for knative labels and annotations
 	GroupName = "delivery.knative.dev"
+
+	// PolicyNameKey is the key for annotations that specify rollout policies
+	PolicyNameKey = GroupName + "/policy"
 )

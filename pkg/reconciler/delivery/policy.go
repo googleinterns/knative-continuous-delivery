@@ -19,6 +19,8 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
 )
 
 // Policy represents the rollout strategy used to update Route objects
@@ -48,6 +50,26 @@ type Policy struct {
 type Stage struct {
 	Percent   int
 	Threshold *int
+}
+
+// translatePolicy takes in a v1alpha1.Policy and returns a Policy
+// it essentially copies v1alpha1.PolicySpec into a delivery.Policy object
+// the purpose is to strip away extraneous info and make things easier for other functions
+// TODO: add unit tests for this function
+func translatePolicy(p *v1alpha1.Policy) *Policy {
+	stages := make([]Stage, len(p.Spec.Stages))
+	for i := range stages {
+		var thresholdptr *int = nil
+		if p.Spec.Stages[i].Threshold != nil {
+			thresholdptr = &(*p.Spec.Stages[i].Threshold)
+		}
+		stages[i] = Stage{p.Spec.Stages[i].Percent, thresholdptr}
+	}
+	return &Policy{
+		Mode:             p.Spec.Mode,
+		Stages:           stages,
+		DefaultThreshold: p.Spec.DefaultThreshold,
+	}
 }
 
 // computeNewPercent calculates, given a Policy and the current rollout stage,
