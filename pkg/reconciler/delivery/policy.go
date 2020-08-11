@@ -55,7 +55,6 @@ type Stage struct {
 // translatePolicy takes in a v1alpha1.Policy and returns a Policy
 // it essentially copies v1alpha1.PolicySpec into a delivery.Policy object
 // the purpose is to strip away extraneous info and make things easier for other functions
-// TODO: add unit tests for this function
 func translatePolicy(p *v1alpha1.Policy) *Policy {
 	stages := make([]Stage, len(p.Spec.Stages))
 	for i := range stages {

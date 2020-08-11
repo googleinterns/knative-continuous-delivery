@@ -18,6 +18,10 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery/v1alpha1"
+	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing/resources"
 )
 
 var (
@@ -155,6 +159,70 @@ func TestMetricTillNextStage(t *testing.T) {
 			ans := metricTillNextStage(tt.policy, tt.elapsed)
 			if ans != tt.want {
 				t.Errorf("wrong answer (got %v, want %v)", ans, tt.want)
+			}
+		})
+	}
+}
+
+func TestNextBiggerInt(t *testing.T) {
+	var tests = []struct {
+		name string
+		in   float64
+		want int
+	}{
+		{name: "normal fractional number", in: 5.5, want: 6},
+		{name: "input equals a whole integer", in: 5.0, want: 6},
+		{name: "extreme positive limit", in: float64(math.MaxInt32), want: 1 << 31},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ans := nextBiggerInt(tt.in)
+			if ans != tt.want {
+				t.Errorf("wrong answer (got %v, want %v)", ans, tt.want)
+			}
+		})
+	}
+}
+
+func TestTranslatePolicy(t *testing.T) {
+	var tests = []struct {
+		name string
+		in   *v1alpha1.Policy
+		want *Policy
+	}{{
+		name: "empty policy (with no stages)",
+		in:   MakePolicy("default", "test", WithMode("time"), WithDefaultThreshold(50)),
+		want: &Policy{
+			Mode:             "time",
+			DefaultThreshold: 50,
+			Stages:           []Stage{},
+		},
+	}, {
+		name: "normal policy with optional thresholds",
+		in: MakePolicy("default", "test", WithMode("time"), WithDefaultThreshold(50),
+			WithStages(v1alpha1.Stage{10, intptr(20)}, v1alpha1.Stage{20, intptr(30)}, v1alpha1.Stage{50, nil})),
+		want: &Policy{
+			Mode:             "time",
+			DefaultThreshold: 50,
+			Stages:           []Stage{{10, intptr(20)}, {20, intptr(30)}, {50, nil}},
+		},
+	}, {
+		name: "normal policy without optional thresholds",
+		in: MakePolicy("default", "test", WithMode("time"), WithDefaultThreshold(50),
+			WithStages(v1alpha1.Stage{10, nil}, v1alpha1.Stage{20, nil}, v1alpha1.Stage{50, nil})),
+		want: &Policy{
+			Mode:             "time",
+			DefaultThreshold: 50,
+			Stages:           []Stage{{10, nil}, {20, nil}, {50, nil}},
+		},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ans := translatePolicy(tt.in)
+			if diff := cmp.Diff(tt.want, ans); diff != "" {
+				t.Errorf("Route object is incorrect (-want, +got): %s", diff)
 			}
 		})
 	}
