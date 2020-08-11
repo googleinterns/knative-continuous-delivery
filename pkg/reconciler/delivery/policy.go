@@ -64,6 +64,10 @@ func translatePolicy(p *v1alpha1.Policy) *Policy {
 		}
 		stages[i] = Stage{p.Spec.Stages[i].Percent, thresholdptr}
 	}
+	// prepend a 0-stage if first stage has non-zero or doesn't exist
+	if len(stages) == 0 || stages[0].Percent != 0 {
+		stages = append([]Stage{{0, nil}}, stages...)
+	}
 	return &Policy{
 		Mode:             p.Spec.Mode,
 		Stages:           stages,

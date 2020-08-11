@@ -196,7 +196,7 @@ func TestTranslatePolicy(t *testing.T) {
 		want: &Policy{
 			Mode:             "time",
 			DefaultThreshold: 50,
-			Stages:           []Stage{},
+			Stages:           []Stage{{0, nil}},
 		},
 	}, {
 		name: "normal policy with optional thresholds",
@@ -205,7 +205,7 @@ func TestTranslatePolicy(t *testing.T) {
 		want: &Policy{
 			Mode:             "time",
 			DefaultThreshold: 50,
-			Stages:           []Stage{{10, intptr(20)}, {20, intptr(30)}, {50, nil}},
+			Stages:           []Stage{{0, nil}, {10, intptr(20)}, {20, intptr(30)}, {50, nil}},
 		},
 	}, {
 		name: "normal policy without optional thresholds",
@@ -214,7 +214,16 @@ func TestTranslatePolicy(t *testing.T) {
 		want: &Policy{
 			Mode:             "time",
 			DefaultThreshold: 50,
-			Stages:           []Stage{{10, nil}, {20, nil}, {50, nil}},
+			Stages:           []Stage{{0, nil}, {10, nil}, {20, nil}, {50, nil}},
+		},
+	}, {
+		name: "do not prepend 0 if it already exists",
+		in: MakePolicy("default", "test", WithMode("time"), WithDefaultThreshold(50),
+			WithStages(v1alpha1.Stage{0, nil}, v1alpha1.Stage{10, nil}, v1alpha1.Stage{20, nil}, v1alpha1.Stage{50, nil})),
+		want: &Policy{
+			Mode:             "time",
+			DefaultThreshold: 50,
+			Stages:           []Stage{{0, nil}, {10, nil}, {20, nil}, {50, nil}},
 		},
 	}}
 
