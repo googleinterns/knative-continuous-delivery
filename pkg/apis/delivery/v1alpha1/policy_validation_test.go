@@ -89,20 +89,6 @@ func TestPolicyValidation(t *testing.T) {
 		},
 		want: apis.ErrGeneric("There must be at least one rollout stage in a Policy", "spec.stages"),
 	}, {
-		name: "initial stage doesn't start with 0",
-		p: &Policy{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      "test",
-			},
-			Spec: PolicySpec{
-				Mode:             "time",
-				DefaultThreshold: 100,
-				Stages:           []Stage{{50, nil}},
-			},
-		},
-		want: apis.ErrGeneric("The first stage must have a percentage value of 0", "spec.stages"),
-	}, {
 		name: "unsorted stage percentages",
 		p: &Policy{
 			ObjectMeta: metav1.ObjectMeta{

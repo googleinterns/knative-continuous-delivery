@@ -40,10 +40,6 @@ func (p *Policy) Validate(ctx context.Context) *apis.FieldError {
 		err = err.Also(apis.ErrGeneric("There must be at least one rollout stage in a Policy", "spec.stages"))
 		return err // no need for further checking
 	}
-	// validate that the first stage must start with 0
-	if p.Spec.Stages[0].Percent != 0 {
-		err = err.Also(apis.ErrGeneric("The first stage must have a percentage value of 0", "spec.stages"))
-	}
 	// validate all stages and check:
 	// (1) all percents are in increasing order
 	// (2) all percents are within range [0, 100)
