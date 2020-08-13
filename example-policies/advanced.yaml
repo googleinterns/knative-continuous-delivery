@@ -1,0 +1,18 @@
+# advanced policy has 3 intermediate rollout stages:
+# stage 1: 25% traffic for the new Revision, with a duration of 30 seconds
+# stage 2: 50% traffic for the new Revision, with a duration of 30 seconds
+# stage 3: 75% traffic for the new Revision, with a duration of 60 seconds (default threshold)
+apiVersion: delivery.knative.dev/v1alpha1
+kind: Policy
+metadata:
+  namespace: default
+  name: advanced-policy
+spec:
+  mode: time
+  defaultThreshold: 60
+  stages:
+  - percent: 25
+    threshold: 30
+  - percent: 50
+    threshold: 30
+  - percent: 75

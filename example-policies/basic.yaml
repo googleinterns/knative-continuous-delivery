@@ -1,0 +1,15 @@
+# basic policy has 2 intermediate rollout stages:
+# stage 1: 1% traffic for the new Revision, with a duration of 60 seconds (default threshold)
+# stage 2: 10% traffic for the new Revision, with a duration of 60 seconds (default threshold)
+# note that we omit the 0% initial stage and 100% final stage here; they are implicitly understood by KCD
+apiVersion: delivery.knative.dev/v1alpha1
+kind: Policy
+metadata:
+  namespace: default
+  name: basic-policy
+spec:
+  mode: time
+  defaultThreshold: 60
+  stages:
+  - percent: 1
+  - percent: 10
