@@ -1,6 +1,24 @@
 \# Handling Multiple Revisions Simultaneously (Example)
 
-Suppose we have a policy that contains 4 rollout stages: 0.1%, 1%, 10%, and 100%. The threshold for going from 0.1% to 1% is 10 seconds, the threshold for going from 1% to 10% is 30 seconds, and the threshold for going from 10% to 100% is 50 seconds (time thresholds do not have to be uniform across all stages).
+Suppose we have a policy that contains 4 rollout stages: 0.1%, 1%, 10%, and 100%. The threshold for going from 0.1% to 1% is 10 seconds, the threshold for going from 1% to 10% is 30 seconds, and the threshold for going from 10% to 100% is 50 seconds (time thresholds do not have to be uniform across all stages). This is reflected in the `Policy` Custom Resource below:
+
+```yaml
+apiVersion: delivery.knative.dev/v1alpha1
+kind: Policy
+metadata:
+  namespace: default
+  name: example-policy
+spec:
+  mode: time
+  defaultThreshold: 60
+  stages:
+  - percent: 0.1
+    threshold: 10
+  - percent: 1
+    threshold: 30
+  - percent: 10
+    threshold: 50
+```
 
 Suppose we have 5 Revisions that follow this policy: R1, R2, R3, R4, and R5. R1 is assumed to be already applied, so it begins with 100% traffic. R2, R3, R4, R5 enter the pool at time 0, 20, 40, and 60 respectively.
 
