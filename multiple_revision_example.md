@@ -1,4 +1,4 @@
-\# Handling Multiple Revisions Simultaneously (Example)
+# Handling Multiple Revisions Simultaneously (Example)
 
 Suppose we have a policy that contains 4 rollout stages: 0.1%, 1%, 10%, and 100%. The threshold for going from 0.1% to 1% is 10 seconds, the threshold for going from 1% to 10% is 30 seconds, and the threshold for going from 10% to 100% is 50 seconds (time thresholds do not have to be uniform across all stages).
 
