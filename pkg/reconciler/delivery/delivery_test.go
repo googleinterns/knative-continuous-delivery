@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/googleinterns/knative-continuous-delivery/pkg/apis/delivery"
 	. "github.com/googleinterns/knative-continuous-delivery/pkg/reconciler/testing/resources"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"knative.dev/pkg/ptr"
@@ -338,6 +339,92 @@ func TestOldestRevision(t *testing.T) {
 			ans := oldestRevision(tt.revMap)
 			if diff := cmp.Diff(tt.want, ans); diff != "" {
 				t.Errorf("wrong answer (-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestIdentifyPolicy(t *testing.T) {
+	var tests = []struct {
+		name          string
+		cfg           *v1.Configuration
+		wantNamespace string
+		wantName      string
+	}{{
+		name: "no prefix, defaults to cfg namespace",
+		cfg: &v1.Configuration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "cfg-namespace",
+				Name:      "cfg-name",
+				Annotations: map[string]string{
+					delivery.PolicyNameKey: "policy-name",
+				},
+			},
+		},
+		wantNamespace: "cfg-namespace",
+		wantName:      "policy-name",
+	}, {
+		name: "prefix with one slash, splits in half",
+		cfg: &v1.Configuration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "cfg-namespace",
+				Name:      "cfg-name",
+				Annotations: map[string]string{
+					delivery.PolicyNameKey: "policy-namespace/policy-name",
+				},
+			},
+		},
+		wantNamespace: "policy-namespace",
+		wantName:      "policy-name",
+	}, {
+		name: "prefix with one slash, namespace == name",
+		cfg: &v1.Configuration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "cfg-namespace",
+				Name:      "cfg-name",
+				Annotations: map[string]string{
+					delivery.PolicyNameKey: "same/same",
+				},
+			},
+		},
+		wantNamespace: "same",
+		wantName:      "same",
+	}, {
+		name: "begins with slash, empty namespace",
+		cfg: &v1.Configuration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "cfg-namespace",
+				Name:      "cfg-name",
+				Annotations: map[string]string{
+					delivery.PolicyNameKey: "/policy-name",
+				},
+			},
+		},
+		wantNamespace: "",
+		wantName:      "policy-name",
+	}, {
+		name: "multiple slashes, only the first one is delimiter",
+		cfg: &v1.Configuration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "cfg-namespace",
+				Name:      "cfg-name",
+				Annotations: map[string]string{
+					delivery.PolicyNameKey: "policy-namespace/something/random/in/between/policy-name",
+				},
+			},
+		},
+		wantNamespace: "policy-namespace",
+		wantName:      "something/random/in/between/policy-name",
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotNamespace, gotName := identifyPolicy(test.cfg)
+			if gotNamespace != test.wantNamespace {
+				t.Errorf("incorrect namespace (got %v, want %v)", gotNamespace, test.wantNamespace)
+			}
+			if gotName != test.wantName {
+				t.Errorf("incorrect name (got %v, want %v)", gotName, test.wantName)
 			}
 		})
 	}

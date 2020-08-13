@@ -38,7 +38,7 @@ If you are not using Knative Service to deploy your service, KCD also supports R
 
 ### Deployment multiple Revisions simultaneously
 
-KCD can handle more than 2 active Revisions for a service at the same time. It will always satisfy the traffic demands of the latest Revision first, followed by the second latest Revision, third latest Revision, and so on. When 100% of traffic has been assigned to a set of Revisions, any older Revisions that are not included in this pool will be eliminated as a traffic target. An in-depth example demonstrating the routing behavior when multiple Revisions are simultaneously "in flight" can be found [here](multiple.md)
+KCD can handle more than 2 active Revisions for a service at the same time. It will always satisfy the traffic demands of the latest Revision first, followed by the second latest Revision, third latest Revision, and so on. When 100% of traffic has been assigned to a set of Revisions, any older Revisions that are not included in this pool will be eliminated as a traffic target. An in-depth example demonstrating the routing behavior when multiple Revisions are simultaneously "in flight" can be found [here](multiple_revision_example.md)
 
 ## Rollout Policies
 

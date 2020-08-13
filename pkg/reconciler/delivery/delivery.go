@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	deliveryclientset "github.com/googleinterns/knative-continuous-delivery/pkg/client/clientset/versioned"
@@ -141,9 +142,8 @@ func (c *Reconciler) fetchRevisions(cfg *v1.Configuration) (map[string]*v1.Revis
 // fetchPolicy queries the indexer to retrieve a Policy object and return its translated version
 // if annotations don't specify a Policy or if the specified Policy cannot be found, an error is returned
 func (c *Reconciler) fetchPolicy(cfg *v1.Configuration) (*Policy, error) {
-	// there's no need for defensive map query check, because it would have been taken care of in ReconcileKind
-	policyName := cfg.Annotations[delivery.PolicyNameKey]
-	p, err := c.policyLister.Policies(cfg.Namespace).Get(policyName)
+	policyNamespace, policyName := identifyPolicy(cfg)
+	p, err := c.policyLister.Policies(policyNamespace).Get(policyName)
 	if err != nil {
 		return nil, err
 	}
@@ -278,4 +278,16 @@ func oldestRevision(r map[string]*v1.Revision) *v1.Revision {
 		}
 	}
 	return result
+}
+
+// identifyPolicy returns a Policy's namespace and name given a configuration and proper annotations
+func identifyPolicy(cfg *v1.Configuration) (policyNamespace, policyName string) {
+	// there's no need for defensive map query check, because it would have been taken care of in ReconcileKind
+	policyNamespace = cfg.Namespace
+	policyName = cfg.Annotations[delivery.PolicyNameKey]
+	if s := strings.SplitN(policyName, "/", 2); len(s) > 1 {
+		policyNamespace = s[0]
+		policyName = s[1]
+	}
+	return
 }
