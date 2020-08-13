@@ -20,6 +20,8 @@ spec:
     threshold: 50
 ```
 
+> Note due to a limitation in `Route` traffic rollout percentages cannot support non-integer values. This example is for illustrative purposes only.
+
 Suppose we have 5 Revisions that follow this policy: R1, R2, R3, R4, and R5. R1 is assumed to be already applied, so it begins with 100% traffic. R2, R3, R4, R5 enter the pool at time 0, 20, 40, and 60 respectively.
 
 Below is a table that shows the state of the system until it stabilizes (R5 reaches 100%):
