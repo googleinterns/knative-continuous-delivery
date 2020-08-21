@@ -179,6 +179,39 @@ func TestTimeTillNextEvent(t *testing.T) {
 	}
 }
 
+func TestIsNameListed(t *testing.T) {
+	var tests = []struct {
+		name       string
+		route      *v1.Route
+		newRevName string
+		want       bool
+	}{{
+		name:       "list does not contain newRevName",
+		route:      Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 95}, pair{"R2", 5})),
+		newRevName: "R3",
+		want:       false,
+	}, {
+		name:       "list contains newRevName",
+		route:      Route("default", "test", withTraffic(WithStatusTraffic, pair{"R1", 95}, pair{"R2", 5})),
+		newRevName: "R2",
+		want:       true,
+	}, {
+		name:       "list is empty",
+		route:      Route("default", "test"),
+		newRevName: "DNE",
+		want:       false,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ans := isNameListed(test.route, test.newRevName)
+			if ans != test.want {
+				t.Errorf("wrong answer (got %v, want %v)", ans, test.want)
+			}
+		})
+	}
+}
+
 func TestModifyRouteSpec(t *testing.T) {
 	var now = time.Now()
 	var timer = clock.NewFakeClock(now)
