@@ -10,10 +10,11 @@ require (
 	k8s.io/kube-openapi v0.0.0-20200410145947-bcb3869e6f29
 	knative.dev/pkg v0.0.0-20200702222342-ea4d6e985ba0
 	knative.dev/serving v0.16.0
-	knative.dev/test-infra v0.0.0-20200708165947-2cd922769fa4
+	knative.dev/test-infra v0.0.0-20200630141629-15f40fe97047
 )
 
 replace (
+	github.com/tsenart/vegeta => github.com/tsenart/vegeta v1.2.1-0.20190917092155-ab06ddb56e2f
 	k8s.io/api => k8s.io/api v0.17.6
 	k8s.io/apimachinery => k8s.io/apimachinery v0.17.6
 	k8s.io/client-go => k8s.io/client-go v0.17.6

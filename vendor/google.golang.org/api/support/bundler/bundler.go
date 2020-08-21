@@ -214,8 +214,6 @@ func (b *Bundler) canFit(bu *bundle, size int) bool {
 
 // Add adds item to the current bundle. It marks the bundle for handling and
 // starts a new one if any of the thresholds or limits are exceeded.
-// The type of item must be assignable to the itemExample parameter of the NewBundler
-// method, otherwise there will be a panic.
 //
 // If the item's size exceeds the maximum bundle size (Bundler.BundleByteLimit), then
 // the item can never be handled. Add returns ErrOversizedItem in this case.
@@ -324,20 +322,17 @@ func (b *Bundler) handle(bu *bundle) {
 		b.handler(bu.items.Interface())
 		bu = b.postHandle(bu)
 	}
+	b.mu.Lock()
+	b.handlerCount--
+	b.mu.Unlock()
 }
 
 func (b *Bundler) postHandle(bu *bundle) *bundle {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
 	b.sem.Release(int64(bu.size))
 	bu.flush.Done()
-
-	bu = b.next()
-	if bu == nil {
-		b.handlerCount--
-	}
-	return bu
+	return b.next()
 }
 
 // AddWait adds item to the current bundle. It marks the bundle for handling and

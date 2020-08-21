@@ -7,8 +7,8 @@ go:
 before_script:
   - go get golang.org/x/lint/golint
 script:
-  - test -z "$(gofmt -s -l cmd/ pkg/)" || (echo "formatting failed. run `gofmt -s -w cmd/ pkg/` to fix." && exit 1)
-  - golint -set_exit_status cmd/... pkg/...
+  - test -z "$(gofmt -s -l cmd/ pkg/ test/)" || (echo "formatting failed. run `gofmt -s -w cmd/ pkg/ test/` to fix." && exit 1)
+  - golint -set_exit_status cmd/... pkg/... test/...
   - go test -v ./cmd/... ./pkg/...
 env:
   - GO111MODULE=on
