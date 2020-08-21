@@ -34,8 +34,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var newServiceMonitoringClientHook clientHook
-
 // ServiceMonitoringCallOptions contains the retry settings for each method of ServiceMonitoringClient.
 type ServiceMonitoringCallOptions struct {
 	CreateService               []gax.CallOption
@@ -141,7 +139,7 @@ func defaultServiceMonitoringCallOptions() *ServiceMonitoringCallOptions {
 	}
 }
 
-// ServiceMonitoringClient is a client for interacting with Cloud Monitoring API.
+// ServiceMonitoringClient is a client for interacting with Stackdriver Monitoring API.
 //
 // Methods, except Close, may be called concurrently. However, fields must not be modified concurrently with method calls.
 type ServiceMonitoringClient struct {
@@ -160,22 +158,12 @@ type ServiceMonitoringClient struct {
 
 // NewServiceMonitoringClient creates a new service monitoring service client.
 //
-// The Cloud Monitoring Service-Oriented Monitoring API has endpoints for
+// The Stackdriver Monitoring Service-Oriented Monitoring API has endpoints for
 // managing and querying aspects of a workspace’s services. These include the
 // Service's monitored resources, its Service-Level Objectives, and a taxonomy
 // of categorized Health Metrics.
 func NewServiceMonitoringClient(ctx context.Context, opts ...option.ClientOption) (*ServiceMonitoringClient, error) {
-	clientOpts := defaultServiceMonitoringClientOptions()
-
-	if newServiceMonitoringClientHook != nil {
-		hookOpts, err := newServiceMonitoringClientHook(ctx, clientHookParams{})
-		if err != nil {
-			return nil, err
-		}
-		clientOpts = append(clientOpts, hookOpts...)
-	}
-
-	connPool, err := gtransport.DialPool(ctx, append(clientOpts, opts...)...)
+	connPool, err := gtransport.DialPool(ctx, append(defaultServiceMonitoringClientOptions(), opts...)...)
 	if err != nil {
 		return nil, err
 	}
