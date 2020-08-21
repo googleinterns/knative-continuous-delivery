@@ -22,8 +22,20 @@ import (
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 )
 
+// isNameListed identifies whether or not a new Revision is already in the pool
+func isNameListed(route *v1.Route, newRevName string) bool {
+	nameListed := false
+	for _, t := range route.Status.Traffic {
+		if t.RevisionName == newRevName {
+			nameListed = true
+			break
+		}
+	}
+	return nameListed
+}
+
 /****************************************************************************************************************
-   modifyRouteSpec assigns traffic to all active Revisions according to the algorithm on page 8 of go/mydesigndoc
+   modifyRouteSpec assigns traffic to an arbitrary number of active Revisions using a policy
    arguments:
    - route: the current Route object
    - r: a lister to query the Revisions by name
@@ -36,14 +48,8 @@ import (
 func modifyRouteSpec(route *v1.Route, r map[string]*v1.Revision, newRevName string, policy *Policy, clock clock.Clock) (*v1.Route, error) {
 	// assumption 1: the current Route Status traffic % are all non-zero (any zero entries would not have been written)
 	// assumption 2: the current Route Status traffic entries are ordered from oldest to newest Revision
-	// first identify whether or not newRevName is already in the pool
-	nameListed := false
-	for _, t := range route.Status.Traffic {
-		if t.RevisionName == newRevName {
-			nameListed = true
-			break
-		}
-	}
+
+	nameListed := isNameListed(route, newRevName)
 
 	// make a slice container to hold the new traffic assignments, and an ordered, lightweight roster of the pool
 	// that contains all current Revision names, INCLUDING the newest one
